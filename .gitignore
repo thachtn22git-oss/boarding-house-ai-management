@@ -1,0 +1,26 @@
+# dependencies
+node_modules
+
+# build
+dist
+build
+
+# env
+.env
+.env.local
+
+# logs
+*.log
+
+# expo
+.expo
+
+# python
+venv
+__pycache__
+
+# vscode
+.vscode
+
+# mac
+.DS_Store
