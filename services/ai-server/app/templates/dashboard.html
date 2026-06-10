@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Boarding House AI Feedback Analyzer</title>
+    <link rel="stylesheet" href="/static/dashboard.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <header class="hero">
+      <nav class="topbar">
+        <a class="brand" href="/dashboard">Boarding House AI Server</a>
+        <div class="nav-links">
+          <a href="/dashboard">Dashboard</a>
+          <a href="/docs">API Docs</a>
+          <a href="/health">Health</a>
+        </div>
+      </nav>
+
+      {% if landing %}
+      <section class="landing-card">
+        <p class="eyebrow">AI Server</p>
+        <h1>Boarding House AI Server</h1>
+        <p>
+          Self-trained feedback classification services for boarding house
+          management.
+        </p>
+        <div class="landing-actions">
+          <a class="button primary" href="/dashboard">Open Dashboard</a>
+          <a class="button secondary" href="/docs">Open API Docs</a>
+          <a class="button secondary" href="/health">Health Check</a>
+        </div>
+      </section>
+      {% endif %}
+
+      <section class="hero-copy">
+        <p class="eyebrow">Feedback AI</p>
+        <h1>Boarding House AI Feedback Analyzer</h1>
+        <p>Self-trained AI models for tenant feedback classification.</p>
+      </section>
+    </header>
+
+    <main class="dashboard-shell">
+      <section class="section-grid">
+        <article class="card tester-card">
+          <div class="section-heading">
+            <p class="eyebrow">Prediction Tester</p>
+            <h2>Analyze tenant feedback</h2>
+          </div>
+          <label class="field-label" for="feedback-input">Feedback text</label>
+          <textarea
+            id="feedback-input"
+            placeholder="Example: The Wi-Fi is very slow in my room."
+          ></textarea>
+          <div class="tester-actions">
+            <button id="analyze-button" class="button primary" type="button">
+              Analyze Feedback
+            </button>
+            <span id="analyze-status" class="status-text"></span>
+          </div>
+          <div id="warning-box" class="warning-box hidden">
+            Low confidence. Manual review is recommended.
+          </div>
+          <div id="result-grid" class="result-grid hidden"></div>
+          <div id="confidence-list" class="confidence-list hidden"></div>
+        </article>
+
+        <article class="card overview-card">
+          <div class="section-heading">
+            <p class="eyebrow">Model Overview</p>
+            <h2>Self-trained local models</h2>
+          </div>
+          <div class="overview-grid">
+            <div>
+              <span>Model Type</span>
+              <strong>TF-IDF + Logistic Regression</strong>
+            </div>
+            <div>
+              <span>Dataset</span>
+              <strong>feedback_dataset.csv</strong>
+            </div>
+            <div>
+              <span>Training</span>
+              <strong>Self-trained locally</strong>
+            </div>
+            <div>
+              <span>External AI API</span>
+              <strong>Not used</strong>
+            </div>
+          </div>
+          <ul class="task-list">
+            <li>Sentiment Analysis</li>
+            <li>Category Classification</li>
+            <li>Priority Suggestion</li>
+          </ul>
+          <p class="muted">
+            The feedback text is converted into TF-IDF features and classified
+            by independent Logistic Regression models.
+          </p>
+          <div id="model-files" class="model-files"></div>
+        </article>
+      </section>
+
+      <section class="card">
+        <div class="section-heading row-heading">
+          <div>
+            <p class="eyebrow">Dataset Statistics</p>
+            <h2>Training data distribution</h2>
+          </div>
+          <span id="dataset-size" class="pill">Loading dataset...</span>
+        </div>
+        <div class="charts-grid">
+          <div class="chart-card">
+            <h3>Sentiment Distribution</h3>
+            <canvas id="sentiment-chart"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>Category Distribution</h3>
+            <canvas id="category-chart"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>Priority Distribution</h3>
+            <canvas id="priority-chart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-heading">
+          <p class="eyebrow">Evaluation Charts</p>
+          <h2>Model performance</h2>
+        </div>
+        <div class="chart-card wide">
+          <canvas id="performance-chart"></canvas>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-heading">
+          <p class="eyebrow">Example Predictions</p>
+          <h2>Try clear demo inputs</h2>
+        </div>
+        <div id="example-grid" class="example-grid"></div>
+      </section>
+    </main>
+
+    <script src="/static/dashboard.js"></script>
+  </body>
+</html>

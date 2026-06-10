@@ -1,5 +1,7 @@
 from pathlib import Path
 import sys
+import json
+from datetime import datetime, timezone
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -18,6 +20,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from app.config import (
     CATEGORY_MODEL_PATH,
     DATASETS_DIR,
+    METRICS_PATH,
     MODELS_DIR,
     PRIORITY_MODEL_PATH,
     SENTIMENT_MODEL_PATH,
@@ -62,7 +65,7 @@ def train_model(
     dataset: pd.DataFrame,
     target_column: str,
     model_path: Path,
-) -> None:
+) -> dict:
     train_data, test_data = train_test_split(
         dataset,
         test_size=TEST_SIZE,
@@ -87,6 +90,19 @@ def train_model(
     print(f"Macro F1: {macro_f1:.4f}")
     print(f"Weighted F1: {weighted_f1:.4f}")
     print(f"Saved {target_column} model to {model_path}")
+    return {
+        "accuracy": round(float(accuracy), 4),
+        "macro_f1": round(float(macro_f1), 4),
+        "weighted_f1": round(float(weighted_f1), 4),
+        "labels": sorted(dataset[target_column].dropna().unique().tolist()),
+    }
+
+
+def save_metrics(metrics: dict) -> None:
+    metrics["updated_at"] = datetime.now(timezone.utc).isoformat()
+    with METRICS_PATH.open("w", encoding="utf-8") as metrics_file:
+        json.dump(metrics, metrics_file, indent=2)
+    print(f"\nSaved metrics to {METRICS_PATH}")
 
 
 def main() -> None:
@@ -100,9 +116,12 @@ def main() -> None:
         print(dataset[column].value_counts().sort_index())
 
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    train_model(dataset, "sentiment", SENTIMENT_MODEL_PATH)
-    train_model(dataset, "category", CATEGORY_MODEL_PATH)
-    train_model(dataset, "priority", PRIORITY_MODEL_PATH)
+    metrics = {
+        "sentiment": train_model(dataset, "sentiment", SENTIMENT_MODEL_PATH),
+        "category": train_model(dataset, "category", CATEGORY_MODEL_PATH),
+        "priority": train_model(dataset, "priority", PRIORITY_MODEL_PATH),
+    }
+    save_metrics(metrics)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,39 @@
+{
+  "sentiment": {
+    "accuracy": 1.0,
+    "macro_f1": 1.0,
+    "weighted_f1": 1.0,
+    "labels": [
+      "negative",
+      "neutral",
+      "positive"
+    ]
+  },
+  "category": {
+    "accuracy": 1.0,
+    "macro_f1": 1.0,
+    "weighted_f1": 1.0,
+    "labels": [
+      "billing",
+      "cleanliness",
+      "electricity",
+      "internet",
+      "maintenance",
+      "other",
+      "security",
+      "water"
+    ]
+  },
+  "priority": {
+    "accuracy": 0.9792,
+    "macro_f1": 0.9769,
+    "weighted_f1": 0.9792,
+    "labels": [
+      "high",
+      "low",
+      "medium",
+      "urgent"
+    ]
+  },
+  "updated_at": "2026-06-10T18:50:48.193246+00:00"
+}

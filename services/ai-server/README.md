@@ -19,6 +19,18 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+## Run Server
+
+```powershell
+uvicorn app.main:app --reload --port 8000
+```
+
+Open:
+
+- Dashboard: `http://localhost:8000/dashboard`
+- API docs: `http://localhost:8000/docs`
+- Health check: `http://localhost:8000/health`
+
 ## Dataset
 
 The feedback dataset is synthetic and generated locally for boarding house and
@@ -84,6 +96,28 @@ Evaluation prints:
 The prediction debug script prints labels and confidence values for manual
 boarding house feedback examples.
 
+## Dashboard and Charts
+
+The AI server includes a simple web dashboard for thesis and demo presentations:
+
+```text
+http://localhost:8000/dashboard
+```
+
+The dashboard provides:
+
+- A feedback prediction tester
+- Model overview cards
+- Dataset distribution charts
+- Model performance charts from `app/models/metrics.json`
+- Example prediction buttons for common feedback cases
+
+The charts are loaded from the local API endpoints:
+
+- `GET /api/model/info`
+- `GET /api/model/dataset-stats`
+- `GET /api/model/metrics`
+
 ## Full Local Workflow
 
 ```powershell
@@ -93,17 +127,6 @@ python scripts/train_feedback_models.py
 python scripts/evaluate_feedback_models.py
 python scripts/test_feedback_predictions.py
 ```
-
-## Run Server
-
-```powershell
-uvicorn app.main:app --reload --port 8000
-```
-
-Health checks:
-
-- `GET http://localhost:8000/`
-- `GET http://localhost:8000/health`
 
 ## Test Feedback Analysis
 

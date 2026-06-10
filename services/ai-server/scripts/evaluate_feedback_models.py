@@ -1,5 +1,7 @@
 from pathlib import Path
 import sys
+import json
+from datetime import datetime, timezone
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -11,7 +13,13 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
 from sklearn.model_selection import train_test_split
 
-from app.config import CATEGORY_MODEL_PATH, DATASETS_DIR, PRIORITY_MODEL_PATH, SENTIMENT_MODEL_PATH
+from app.config import (
+    CATEGORY_MODEL_PATH,
+    DATASETS_DIR,
+    METRICS_PATH,
+    PRIORITY_MODEL_PATH,
+    SENTIMENT_MODEL_PATH,
+)
 from app.utils.text_preprocessing import clean_text
 
 
@@ -103,7 +111,7 @@ MANUAL_EXAMPLES = [
 ]
 
 
-def evaluate_model(name: str, model_path, data: pd.DataFrame, target_column: str) -> None:
+def evaluate_model(name: str, model_path, data: pd.DataFrame, target_column: str) -> dict:
     if not model_path.exists():
         raise FileNotFoundError(
             f"{name} model was not found. Run scripts/train_feedback_models.py first."
@@ -119,16 +127,34 @@ def evaluate_model(name: str, model_path, data: pd.DataFrame, target_column: str
     )
     predictions = model.predict(test_data["clean_content"])
 
+    accuracy = accuracy_score(test_data[target_column], predictions)
+    macro_f1 = f1_score(test_data[target_column], predictions, average="macro")
+    weighted_f1 = f1_score(test_data[target_column], predictions, average="weighted")
+    labels = sorted(data[target_column].unique())
+
     print(f"\n{name.upper()} MODEL")
-    print(f"Accuracy: {accuracy_score(test_data[target_column], predictions):.4f}")
-    print(f"Macro F1: {f1_score(test_data[target_column], predictions, average='macro'):.4f}")
-    print(f"Weighted F1: {f1_score(test_data[target_column], predictions, average='weighted'):.4f}")
+    print(f"Accuracy: {accuracy:.4f}")
+    print(f"Macro F1: {macro_f1:.4f}")
+    print(f"Weighted F1: {weighted_f1:.4f}")
     print("\nClassification report:")
     print(classification_report(test_data[target_column], predictions, zero_division=0))
     print("Confusion matrix:")
-    labels = sorted(data[target_column].unique())
     print(f"Labels: {labels}")
     print(confusion_matrix(test_data[target_column], predictions, labels=labels))
+
+    return {
+        "accuracy": round(float(accuracy), 4),
+        "macro_f1": round(float(macro_f1), 4),
+        "weighted_f1": round(float(weighted_f1), 4),
+        "labels": labels,
+    }
+
+
+def save_metrics(metrics: dict) -> None:
+    metrics["updated_at"] = datetime.now(timezone.utc).isoformat()
+    with METRICS_PATH.open("w", encoding="utf-8") as metrics_file:
+        json.dump(metrics, metrics_file, indent=2)
+    print(f"\nSaved metrics to {METRICS_PATH}")
 
 
 def run_manual_examples() -> None:
@@ -151,9 +177,12 @@ def main() -> None:
     dataset = pd.read_csv(DATASET_PATH)
     dataset["clean_content"] = dataset["content"].apply(clean_text)
 
-    evaluate_model("sentiment", SENTIMENT_MODEL_PATH, dataset, "sentiment")
-    evaluate_model("category", CATEGORY_MODEL_PATH, dataset, "category")
-    evaluate_model("priority", PRIORITY_MODEL_PATH, dataset, "priority")
+    metrics = {
+        "sentiment": evaluate_model("sentiment", SENTIMENT_MODEL_PATH, dataset, "sentiment"),
+        "category": evaluate_model("category", CATEGORY_MODEL_PATH, dataset, "category"),
+        "priority": evaluate_model("priority", PRIORITY_MODEL_PATH, dataset, "priority"),
+    }
+    save_metrics(metrics)
     run_manual_examples()
 
 
