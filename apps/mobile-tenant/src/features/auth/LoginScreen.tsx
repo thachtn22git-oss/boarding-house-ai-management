@@ -43,6 +43,9 @@ export function LoginScreen() {
         <View style={styles.card}>
           <Text style={styles.title}>Sign in</Text>
           <Text style={styles.description}>Use your tenant account to view invoices, utilities, feedback, and alerts.</Text>
+          <View style={styles.hintBox}>
+            <Text style={styles.hintText}>Only tenant accounts can access this mobile app.</Text>
+          </View>
 
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Email</Text>
@@ -126,6 +129,19 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 14,
     lineHeight: 20,
+  },
+  hintBox: {
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: spacing.md,
+  },
+  hintText: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 19,
   },
   fieldGroup: {
     gap: spacing.sm,

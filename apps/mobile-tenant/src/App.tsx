@@ -34,10 +34,10 @@ function TenantApp() {
 
   return (
     <AppShell activeTab={activeTab} onChangeTab={setActiveTab}>
-      {activeTab === 'home' ? <TenantHomeScreen /> : null}
+      {activeTab === 'home' ? <TenantHomeScreen onNavigate={setActiveTab} /> : null}
       {activeTab === 'invoices' ? <MyInvoicesScreen /> : null}
       {activeTab === 'feedback' ? <MyFeedbackScreen /> : null}
-      {activeTab === 'notifications' ? <NotificationsScreen /> : null}
+      {activeTab === 'notifications' ? <NotificationsScreen onNavigate={setActiveTab} /> : null}
       {activeTab === 'room' ? <MyRoomScreen /> : null}
       {activeTab === 'contract' ? <MyContractScreen /> : null}
       {activeTab === 'utilities' ? <MyUtilitiesScreen /> : null}

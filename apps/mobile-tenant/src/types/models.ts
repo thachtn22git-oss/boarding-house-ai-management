@@ -19,6 +19,7 @@ export interface Room {
   id: string
   ownerId: string
   roomNumber: string
+  floor?: number
   roomType: string
   area?: number
   price?: number
@@ -59,10 +60,23 @@ export interface Invoice {
   roomId: string
   invoiceCode: string
   billingMonth: string
+  issueDate?: string
   dueDate: string
+  items?: InvoiceItem[]
+  subtotal?: number
+  discount?: number
   totalAmount: number
   paidAmount: number
   status: InvoiceStatus
+  note?: string
+}
+
+export interface InvoiceItem {
+  id: string
+  name: string
+  quantity: number
+  unitPrice: number
+  amount: number
 }
 
 export interface UtilityReading {
@@ -75,8 +89,10 @@ export interface UtilityReading {
   previousReading: number
   currentReading: number
   usage: number
+  unitPrice?: number
   totalAmount: number
   status: UtilityReadingStatus
+  note?: string
 }
 
 export interface Feedback {

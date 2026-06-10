@@ -1,19 +1,25 @@
 import { useEffect, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Alert, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../providers/AuthProvider'
 import { Screen } from '../../components/common/Screen'
 import { PrimaryButton } from '../../components/common/PrimaryButton'
 import { ListCard } from '../../components/cards/ListCard'
 import { colors, spacing } from '../../constants/theme'
 import {
+  deleteNotification,
   markAllNotificationsAsRead,
   markNotificationAsRead,
   subscribeToNotifications,
 } from '../../services/notification.service'
 import type { Notification } from '../../types/notification'
 import { formatRelativeTime } from '../../utils/format'
+import type { TenantTabKey } from '../../constants/navigation'
 
-export function NotificationsScreen() {
+interface NotificationsScreenProps {
+  onNavigate: (tab: TenantTabKey) => void
+}
+
+export function NotificationsScreen({ onNavigate }: NotificationsScreenProps) {
   const { currentUser } = useAuth()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,6 +48,35 @@ export function NotificationsScreen() {
     await markAllNotificationsAsRead(currentUser.uid)
   }
 
+  async function openNotification(notification: Notification) {
+    if (!notification.read) await markNotificationAsRead(notification.id)
+
+    switch (notification.actionUrl) {
+      case '/tenant/my-invoices':
+        onNavigate('invoices')
+        break
+      case '/tenant/my-utilities':
+        onNavigate('utilities')
+        break
+      case '/tenant/my-feedback':
+        onNavigate('feedback')
+        break
+      case '/tenant/my-contract':
+        onNavigate('contract')
+        break
+      default:
+        Alert.alert('Notification', 'No mobile destination is available for this notification.')
+        break
+    }
+  }
+
+  function confirmDelete(notificationId: string) {
+    Alert.alert('Delete Notification', 'This action cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => void deleteNotification(notificationId) },
+    ])
+  }
+
   return (
     <Screen loading={loading} subtitle="Realtime tenant alerts and updates." title="Notifications">
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -52,11 +87,16 @@ export function NotificationsScreen() {
           <View style={[styles.notification, !notification.read ? styles.unread : null]}>
             <Text style={styles.message}>{notification.message}</Text>
             <Text style={styles.meta}>
-              {notification.priority} | {notification.read ? 'Read' : 'Unread'} | {formatRelativeTime(notification.createdAt)}
+              {notification.type} | {notification.priority} | {notification.read ? 'Read' : 'Unread'} |{' '}
+              {formatRelativeTime(notification.createdAt)}
             </Text>
             {!notification.read ? (
               <PrimaryButton label="Mark as read" onPress={() => void markNotificationAsRead(notification.id)} variant="secondary" />
             ) : null}
+            <View style={styles.actions}>
+              <PrimaryButton label="Open" onPress={() => void openNotification(notification)} />
+              <PrimaryButton label="Delete" onPress={() => confirmDelete(notification.id)} variant="danger" />
+            </View>
           </View>
         </ListCard>
       ))}
@@ -90,5 +130,10 @@ const styles = StyleSheet.create({
   error: {
     color: colors.danger,
     fontWeight: '700',
+  },
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
 })

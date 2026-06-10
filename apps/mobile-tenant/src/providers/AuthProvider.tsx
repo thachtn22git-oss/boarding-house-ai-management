@@ -24,7 +24,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (!snapshot.exists()) throw new Error('User profile was not found.')
 
     const data = snapshot.data()
-    if (data.role !== 'tenant') throw new Error('This account is not allowed to access this app.')
+    if (data.role !== 'tenant') throw new Error('This account is not allowed to access the Tenant app.')
 
     return {
       uid,
@@ -103,7 +103,7 @@ function getAuthErrorMessage(error: unknown) {
   if (code === 'auth/user-not-found') return 'No account found with this email.'
   if (code === 'auth/wrong-password') return 'Incorrect password.'
   if (code === 'auth/too-many-requests') return 'Too many attempts. Please try again later.'
-  if (error instanceof Error && error.message === 'This account is not allowed to access this app.') return error.message
+  if (error instanceof Error && error.message === 'This account is not allowed to access the Tenant app.') return error.message
 
   return 'Something went wrong. Please try again.'
 }

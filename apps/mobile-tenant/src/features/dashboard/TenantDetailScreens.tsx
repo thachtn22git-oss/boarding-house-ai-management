@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useAuth } from '../../providers/AuthProvider'
 import { Screen } from '../../components/common/Screen'
 import { PrimaryButton } from '../../components/common/PrimaryButton'
@@ -13,7 +13,7 @@ import {
   type TenantPortalData,
 } from '../../services/tenantPortal.service'
 import { formatCurrency, formatDate } from '../../utils/format'
-import type { FeedbackCategory, FeedbackPriority } from '../../types/models'
+import type { Feedback, FeedbackCategory, FeedbackPriority, Invoice, UtilityReading } from '../../types/models'
 
 function useTenantPortalData() {
   const { currentUser } = useAuth()
@@ -55,6 +55,7 @@ export function MyRoomScreen() {
       {room ? (
         <ListCard title={`Room ${room.roomNumber}`}>
           <Text style={styles.meta}>Room Type: {room.roomType}</Text>
+          <Text style={styles.meta}>Floor: {room.floor ?? 'Not available'}</Text>
           <Text style={styles.meta}>Area: {room.area ?? 0} m2</Text>
           <Text style={styles.meta}>Price: {formatCurrency(room.price)}</Text>
           <Text style={styles.meta}>Deposit: {formatCurrency(room.deposit)}</Text>
@@ -84,7 +85,7 @@ export function MyContractScreen() {
           <Text style={styles.meta}>Due Day: {contract.paymentDueDay}</Text>
           <Text style={styles.meta}>Status: {contract.status}</Text>
           <Text style={styles.meta}>Terms: {contract.terms ?? 'Not available'}</Text>
-          <PrimaryButton label="Print Contract" onPress={() => Alert.alert('Print Contract', 'Printing is available on supported devices.')} />
+          <PrimaryButton label="Print Contract" onPress={() => Alert.alert('Print Contract', 'Print is available on the web portal.')} />
         </ListCard>
       ) : null}
     </Screen>
@@ -94,6 +95,7 @@ export function MyContractScreen() {
 export function MyInvoicesScreen() {
   const { data, loading, error, reload } = useTenantPortalData()
   const invoices = data?.invoices ?? []
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
 
   return (
     <Screen loading={loading} onRefresh={reload} refreshing={loading} subtitle="Your monthly invoices and payment status." title="My Invoices">
@@ -111,9 +113,23 @@ export function MyInvoicesScreen() {
           <Text style={styles.meta}>Due Date: {invoice.dueDate}</Text>
           <Text style={styles.meta}>Total Amount: {formatCurrency(invoice.totalAmount)}</Text>
           <Text style={styles.meta}>Paid Amount: {formatCurrency(invoice.paidAmount)}</Text>
+          <Text style={styles.meta}>Remaining Amount: {formatCurrency((invoice.totalAmount ?? 0) - (invoice.paidAmount ?? 0))}</Text>
           <Text style={styles.meta}>Status: {invoice.status}</Text>
+          <View style={styles.actions}>
+            <PrimaryButton label="View Details" onPress={() => setSelectedInvoice(invoice)} variant="secondary" />
+            <PrimaryButton
+              label="Confirm Payment"
+              onPress={() => Alert.alert('Payment', 'Online payment will be implemented in a later phase.')}
+            />
+          </View>
         </ListCard>
       ))}
+      <InvoiceDetailModal
+        invoice={selectedInvoice}
+        room={data?.room ?? null}
+        tenantName={data?.tenant?.fullName ?? 'Tenant'}
+        onClose={() => setSelectedInvoice(null)}
+      />
     </Screen>
   )
 }
@@ -136,8 +152,10 @@ export function MyUtilitiesScreen() {
           <Text style={styles.meta}>Previous: {reading.previousReading}</Text>
           <Text style={styles.meta}>Current: {reading.currentReading}</Text>
           <Text style={styles.meta}>Usage: {reading.usage}</Text>
+          <Text style={styles.meta}>Unit Price: {formatCurrency(reading.unitPrice)}</Text>
           <Text style={styles.meta}>Total Amount: {formatCurrency(reading.totalAmount)}</Text>
           <Text style={styles.meta}>Status: {reading.status}</Text>
+          <PrimaryButton label="View Details" onPress={() => showUtilityDetails(reading)} variant="secondary" />
         </ListCard>
       ))}
     </Screen>
@@ -169,6 +187,21 @@ export function MyFeedbackScreen() {
 
     if (!content.trim()) {
       setFormError('Content is required.')
+      return
+    }
+
+    if (!category) {
+      setFormError('Category is required.')
+      return
+    }
+
+    if (!priority) {
+      setFormError('Priority is required.')
+      return
+    }
+
+    if (!sentiment) {
+      setFormError('Sentiment is required.')
       return
     }
 
@@ -234,10 +267,87 @@ export function MyFeedbackScreen() {
           <Text style={styles.meta}>Sentiment: {feedback.sentiment ?? 'neutral'}</Text>
           <Text style={styles.meta}>Status: {feedback.status}</Text>
           <Text style={styles.meta}>Owner Response: {feedback.ownerResponse ?? 'Not available'}</Text>
-          <Text style={styles.meta}>AI Summary: {feedback.aiSummary ?? 'Not available'}</Text>
+          <PrimaryButton label="View Details" onPress={() => showFeedbackDetails(feedback)} variant="secondary" />
         </ListCard>
       ))}
     </Screen>
+  )
+}
+
+function InvoiceDetailModal({
+  invoice,
+  room,
+  tenantName,
+  onClose,
+}: {
+  invoice: Invoice | null
+  room: { roomNumber: string; roomType: string } | null
+  tenantName: string
+  onClose: () => void
+}) {
+  if (!invoice) return null
+
+  const subtotal = invoice.subtotal ?? invoice.items?.reduce((total, item) => total + item.amount, 0) ?? invoice.totalAmount
+  const discount = invoice.discount ?? 0
+  const remaining = Math.max(0, (invoice.totalAmount ?? 0) - (invoice.paidAmount ?? 0))
+
+  return (
+    <Modal animationType="slide" visible={!!invoice} onRequestClose={onClose}>
+      <ScrollView contentContainerStyle={styles.modalContent}>
+        <Text style={styles.modalTitle}>{invoice.invoiceCode}</Text>
+        <Text style={styles.meta}>Tenant: {tenantName}</Text>
+        <Text style={styles.meta}>Room: {room ? `${room.roomNumber} - ${room.roomType}` : 'Not available'}</Text>
+        <Text style={styles.sectionTitle}>Items</Text>
+        {!invoice.items?.length ? <Text style={styles.empty}>No invoice items available.</Text> : null}
+        {invoice.items?.map((item) => (
+          <View key={item.id} style={styles.detailBox}>
+            <Text style={styles.meta}>Name: {item.name}</Text>
+            <Text style={styles.meta}>Quantity: {item.quantity}</Text>
+            <Text style={styles.meta}>Unit Price: {formatCurrency(item.unitPrice)}</Text>
+            <Text style={styles.meta}>Amount: {formatCurrency(item.amount)}</Text>
+          </View>
+        ))}
+        <Text style={styles.meta}>Subtotal: {formatCurrency(subtotal)}</Text>
+        <Text style={styles.meta}>Discount: {formatCurrency(discount)}</Text>
+        <Text style={styles.meta}>Total Amount: {formatCurrency(invoice.totalAmount)}</Text>
+        <Text style={styles.meta}>Paid Amount: {formatCurrency(invoice.paidAmount)}</Text>
+        <Text style={styles.meta}>Remaining Amount: {formatCurrency(remaining)}</Text>
+        <Text style={styles.meta}>Status: {invoice.status}</Text>
+        <Text style={styles.meta}>Note: {invoice.note ?? 'Not available'}</Text>
+        <PrimaryButton label="Close" onPress={onClose} />
+      </ScrollView>
+    </Modal>
+  )
+}
+
+function showUtilityDetails(reading: UtilityReading) {
+  Alert.alert(
+    `${capitalize(reading.utilityType)} Details`,
+    [
+      `Billing Month: ${reading.billingMonth}`,
+      `Previous Reading: ${reading.previousReading}`,
+      `Current Reading: ${reading.currentReading}`,
+      `Usage: ${reading.usage}`,
+      `Unit Price: ${formatCurrency(reading.unitPrice)}`,
+      `Total Amount: ${formatCurrency(reading.totalAmount)}`,
+      `Status: ${reading.status}`,
+      `Note: ${reading.note ?? 'Not available'}`,
+    ].join('\n'),
+  )
+}
+
+function showFeedbackDetails(feedback: Feedback) {
+  Alert.alert(
+    feedback.title,
+    [
+      feedback.content,
+      `Category: ${feedback.category}`,
+      `Priority: ${feedback.priority}`,
+      `Sentiment: ${feedback.sentiment ?? 'neutral'}`,
+      `Status: ${feedback.status}`,
+      `Owner Response: ${feedback.ownerResponse ?? 'Not available'}`,
+      `AI Summary: ${feedback.aiSummary ?? 'Not available'}`,
+    ].join('\n\n'),
   )
 }
 
@@ -314,5 +424,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
+  },
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  modalContent: {
+    backgroundColor: colors.background,
+    gap: spacing.lg,
+    padding: spacing.lg,
+    paddingTop: 56,
+  },
+  modalTitle: {
+    color: colors.text,
+    fontSize: 24,
+    fontWeight: '900',
+  },
+  sectionTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  detailBox: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: spacing.xs,
+    padding: spacing.md,
   },
 })

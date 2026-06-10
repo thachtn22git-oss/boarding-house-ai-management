@@ -30,6 +30,7 @@ export interface TenantPortalData {
   invoices: Invoice[]
   utilities: UtilityReading[]
   feedbacks: Feedback[]
+  notifications: Awaited<ReturnType<typeof getNotifications>>
   unreadNotifications: number
 }
 
@@ -59,6 +60,7 @@ export async function getCurrentTenant(currentUser: AppUser): Promise<TenantPort
       invoices: [],
       utilities: [],
       feedbacks: [],
+      notifications: [],
       unreadNotifications: (await getNotifications(currentUser.uid)).filter((item) => !item.read).length,
     }
   }
@@ -74,8 +76,8 @@ export async function getCurrentTenant(currentUser: AppUser): Promise<TenantPort
     ])
 
   const contracts = contractsSnapshot.docs.map((item) => mapDoc<Contract>(item))
-  const invoices = invoicesSnapshot.docs.map((item) => mapDoc<Invoice>(item))
-  const utilities = utilitiesSnapshot.docs.map((item) => mapDoc<UtilityReading>(item))
+  const invoices = sortByDateDesc(invoicesSnapshot.docs.map((item) => mapDoc<Invoice>(item)), 'dueDate')
+  const utilities = sortByDateDesc(utilitiesSnapshot.docs.map((item) => mapDoc<UtilityReading>(item)), 'billingMonth')
   const feedbacks = feedbackSnapshot.docs.map((item) => mapDoc<Feedback>(item))
 
   return {
@@ -85,6 +87,7 @@ export async function getCurrentTenant(currentUser: AppUser): Promise<TenantPort
     invoices,
     utilities,
     feedbacks,
+    notifications,
     unreadNotifications: notifications.filter((item) => !item.read).length,
   }
 }
@@ -120,4 +123,8 @@ export async function createTenantFeedback(tenant: Tenant, values: TenantFeedbac
   } catch (notificationError) {
     console.warn('Owner notification creation failed after tenant feedback submission.', notificationError)
   }
+}
+
+function sortByDateDesc<T>(items: T[], key: keyof T) {
+  return [...items].sort((a, b) => String(b[key] ?? '').localeCompare(String(a[key] ?? '')))
 }
