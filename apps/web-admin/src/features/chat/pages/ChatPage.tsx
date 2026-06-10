@@ -238,25 +238,46 @@ function ChatPage() {
     setIsSending(true)
     setError('')
 
+    const timeoutMessage =
+      'Message sending is taking longer than expected. Please try again.'
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+
     try {
-      await sendMessage(
-        selectedRoom.id,
-        {
-          uid: currentUser.uid,
-          fullName: currentUser.fullName,
-          email: currentUser.email,
-          role: currentUser.role,
-        },
-        text,
-      )
+      console.log('Sending chat message...')
+
+      await Promise.race([
+        sendMessage(
+          selectedRoom.id,
+          {
+            uid: currentUser.uid,
+            fullName: currentUser.fullName || currentUser.email,
+            email: currentUser.email,
+            role: currentUser.role,
+          },
+          text,
+        ),
+        new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(new Error(timeoutMessage))
+          }, 8000)
+        }),
+      ])
+
+      console.log('Chat message sent.')
     } catch (sendError) {
-      console.warn('Unable to send chat message.', sendError)
-      setError(
+      const message =
         sendError instanceof Error
           ? sendError.message
-          : 'Unable to send this message.',
-      )
+          : 'Unable to send this message.'
+
+      console.warn('Unable to send chat message.', sendError)
+      setError(message)
+      throw new Error(message)
     } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+
       setIsSending(false)
     }
   }

@@ -197,7 +197,8 @@
 
 .chat-conversation-header {
   padding: 18px 22px;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid #e5e7eb;
+  background: #ffffff;
 }
 
 .chat-message-list {
@@ -223,42 +224,50 @@
 .chat-message-bubble {
   max-width: min(70%, 560px);
   padding: 12px 14px;
-  border: 1px solid var(--color-border);
+  border: 1px solid #e2e8f0;
   border-radius: 14px 14px 14px 4px;
-  background: #ffffff;
+  color: #0f172a;
+  background: #f1f5f9;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
 }
 
 .chat-message.own .chat-message-bubble {
-  border-color: var(--color-primary);
+  border-color: #2563eb;
   border-radius: 14px 14px 4px 14px;
   color: #ffffff;
-  background: var(--color-primary);
+  background: #2563eb;
 }
 
 .chat-message-bubble strong {
   display: block;
   margin-bottom: 6px;
+  color: #334155;
   font-size: 12px;
+  font-weight: 600;
 }
 
 .chat-message-bubble p {
   margin: 0;
+  color: #0f172a;
   font-size: 14px;
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
+.chat-message.own .chat-message-bubble p {
+  color: #ffffff;
+}
+
 .chat-message-bubble time {
   display: block;
   margin-top: 8px;
-  color: var(--color-muted);
+  color: #64748b;
   font-size: 11px;
 }
 
 .chat-message.own .chat-message-bubble time {
-  color: rgba(255, 255, 255, 0.78);
+  color: #dbeafe;
 }
 
 .chat-message-input {
@@ -266,7 +275,7 @@
   flex: 0 0 auto;
   gap: 10px;
   padding: 16px;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid #e5e7eb;
   background: #ffffff;
 }
 
@@ -277,11 +286,16 @@
   flex: 1;
   resize: vertical;
   padding: 11px 12px;
-  border: 1px solid var(--color-border);
+  border: 1px solid #cbd5e1;
   border-radius: 8px;
-  color: var(--color-text);
+  color: #0f172a;
+  background: #ffffff;
   font: inherit;
   line-height: 20px;
+}
+
+.chat-message-input textarea::placeholder {
+  color: #94a3b8;
 }
 
 .chat-message-input .primary-button {
@@ -327,7 +341,7 @@
   place-content: center;
   justify-items: center;
   padding: 32px;
-  color: var(--color-muted);
+  color: #64748b;
   text-align: center;
 }
 

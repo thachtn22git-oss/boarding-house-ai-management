@@ -14,17 +14,25 @@ function ChatMessageInput({
 }: ChatMessageInputProps) {
   const [message, setMessage] = useState('')
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-
+  async function sendCurrentMessage() {
     const nextMessage = message.trim()
 
-    if (!nextMessage) {
+    if (!nextMessage || disabled || sending) {
       return
     }
 
-    await onSend(nextMessage)
-    setMessage('')
+    try {
+      await onSend(nextMessage)
+      setMessage('')
+    } catch {
+      // The parent page owns the visible error state. Keep the text so it can be retried.
+    }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    await sendCurrentMessage()
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -35,7 +43,7 @@ function ChatMessageInput({
         return
       }
 
-      void Promise.resolve(onSend(message.trim())).then(() => setMessage(''))
+      void sendCurrentMessage()
     }
   }
 

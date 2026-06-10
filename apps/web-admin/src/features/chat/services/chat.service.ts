@@ -357,7 +357,7 @@ export async function sendMessage(
   const preview =
     trimmedText.length > 80 ? `${trimmedText.slice(0, 77)}...` : trimmedText
 
-  await Promise.allSettled(
+  void Promise.allSettled(
     room.participantIds
       .filter((participantId) => participantId !== sender.uid)
       .map((participantId) =>
@@ -380,7 +380,7 @@ export async function sendMessage(
   ).then((results) => {
     results.forEach((result) => {
       if (result.status === 'rejected') {
-        console.warn('Unable to create chat notification.', result.reason)
+        console.warn('Chat notification failed:', result.reason)
       }
     })
   })
