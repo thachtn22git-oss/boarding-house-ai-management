@@ -21,6 +21,7 @@ export interface Room {
   id: string
   ownerId: string
   roomNumber: string
+  floor?: number
   roomType: string
   area?: number
   price?: number
@@ -37,6 +38,8 @@ export interface Tenant {
   fullName: string
   email: string
   phone?: string
+  identityNumber?: string
+  moveInDate?: string
   status: TenantStatus
 }
 
@@ -57,9 +60,23 @@ export interface Invoice {
   roomId: string
   invoiceCode: string
   billingMonth: string
+  issueDate?: string
+  dueDate?: string
+  items?: InvoiceItem[]
+  subtotal?: number
+  discount?: number
   totalAmount: number
   paidAmount: number
   status: InvoiceStatus
+  note?: string
+}
+
+export interface InvoiceItem {
+  id: string
+  name: string
+  quantity: number
+  unitPrice: number
+  amount: number
 }
 
 export interface UtilityReading {
@@ -69,9 +86,13 @@ export interface UtilityReading {
   tenantId?: string
   utilityType: UtilityType
   billingMonth: string
+  previousReading?: number
+  currentReading?: number
   usage: number
+  unitPrice?: number
   totalAmount: number
   status: UtilityReadingStatus
+  note?: string
 }
 
 export interface Feedback {
@@ -84,8 +105,59 @@ export interface Feedback {
   priority: FeedbackPriority
   sentiment?: SentimentLabel
   status: FeedbackStatus
+  content?: string
+  ownerResponse?: string
+  aiSummary?: string
 }
 
 export interface TenantWithRoom extends Tenant {
   room?: Room | null
+}
+
+export interface RoomFormValues {
+  roomNumber: string
+  floor: number
+  roomType: string
+  area: number
+  price: number
+  deposit: number
+  maxTenants: number
+  status: RoomStatus
+  description?: string
+}
+
+export interface TenantFormValues {
+  roomId: string
+  fullName: string
+  email: string
+  phone: string
+  identityNumber: string
+  moveInDate: string
+  status: TenantStatus
+}
+
+export interface InvoiceFormValues {
+  tenantId: string
+  roomId: string
+  invoiceCode: string
+  billingMonth: string
+  issueDate: string
+  dueDate: string
+  items: InvoiceItem[]
+  discount: number
+  paidAmount: number
+  status: InvoiceStatus
+  note?: string
+}
+
+export interface UtilityReadingFormValues {
+  roomId: string
+  tenantId?: string
+  utilityType: UtilityType
+  billingMonth: string
+  previousReading: number
+  currentReading: number
+  unitPrice: number
+  status: UtilityReadingStatus
+  note?: string
 }

@@ -1,20 +1,24 @@
 import { useEffect, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Alert, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../providers/AuthProvider'
 import { Screen } from '../../components/common/Screen'
 import { PrimaryButton } from '../../components/common/PrimaryButton'
 import { ListCard } from '../../components/cards/ListCard'
+import { confirmAction } from '../../components/common/ConfirmDialog'
 import { colors, spacing } from '../../constants/theme'
 import {
+  deleteNotification,
   markAllNotificationsAsRead,
   markNotificationAsRead,
   subscribeToNotifications,
 } from '../../services/notification.service'
 import type { Notification } from '../../types/notification'
 import { formatRelativeTime } from '../../utils/format'
+import { useOwnerNavigation } from '../../components/layout/useOwnerNavigation'
 
 export function NotificationsScreen() {
   const { currentUser } = useAuth()
+  const navigate = useOwnerNavigation()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -44,6 +48,31 @@ export function NotificationsScreen() {
     await markAllNotificationsAsRead(currentUser.uid)
   }
 
+  async function openNotification(notification: Notification) {
+    if (!notification.read) await markNotificationAsRead(notification.id)
+
+    switch (notification.actionUrl) {
+      case '/owner/feedback':
+        navigate('feedback')
+        break
+      case '/owner/invoices':
+        navigate('invoices')
+        break
+      case '/owner/utilities':
+        navigate('utilities')
+        break
+      case '/owner/rooms':
+        navigate('rooms')
+        break
+      case '/owner/contracts':
+        Alert.alert('Contracts', 'Contracts are available on web for now.')
+        break
+      default:
+        Alert.alert('Notification', 'No mobile destination is available for this notification.')
+        break
+    }
+  }
+
   return (
     <Screen loading={loading} subtitle="Realtime alerts for important owner activity." title="Notifications">
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -63,6 +92,18 @@ export function NotificationsScreen() {
                 variant="secondary"
               />
             ) : null}
+            <View style={styles.actions}>
+              <PrimaryButton label="Open" onPress={() => void openNotification(notification)} />
+              <PrimaryButton
+                label="Delete"
+                onPress={() =>
+                  confirmAction('Delete Notification', 'This action cannot be undone.', () => {
+                    void deleteNotification(notification.id)
+                  })
+                }
+                variant="danger"
+              />
+            </View>
           </View>
         </ListCard>
       ))}
@@ -96,5 +137,10 @@ const styles = StyleSheet.create({
   error: {
     color: colors.danger,
     fontWeight: '700',
+  },
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
 })

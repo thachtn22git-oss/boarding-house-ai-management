@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   getDocs,
   onSnapshot,
   orderBy,
@@ -90,4 +91,8 @@ export async function markAllNotificationsAsRead(userId: string) {
   })
 
   await batch.commit()
+}
+
+export async function deleteNotification(notificationId: string) {
+  await deleteDoc(doc(db, 'notifications', notificationId))
 }
