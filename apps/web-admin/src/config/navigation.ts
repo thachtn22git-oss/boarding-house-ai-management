@@ -9,6 +9,7 @@ export type OwnerPageKey =
   | 'utilities'
   | 'feedback'
   | 'notifications'
+  | 'chat'
   | 'analytics'
   | 'aiAssistant'
 
@@ -104,6 +105,14 @@ export const ownerPages: NavigationItem[] = [
     portalLabel: appLabels.ownerPortal,
   },
   {
+    key: 'chat',
+    label: 'Chat',
+    shortLabel: 'CH',
+    path: '/owner/chat',
+    description: 'Send realtime messages to tenants and review conversations.',
+    portalLabel: appLabels.ownerPortal,
+  },
+  {
     key: 'analytics',
     label: 'Analytics',
     shortLabel: 'AN',
@@ -162,6 +171,14 @@ export const adminPages: NavigationItem[] = [
     shortLabel: 'NT',
     path: '/admin/notifications',
     description: 'View system updates and important alerts.',
+    portalLabel: appLabels.adminPortal,
+  },
+  {
+    key: 'chat',
+    label: 'Chat',
+    shortLabel: 'CH',
+    path: '/admin/chat',
+    description: 'Monitor chat workflows and future moderation tools.',
     portalLabel: appLabels.adminPortal,
   },
   {
@@ -238,6 +255,14 @@ export const tenantPages: NavigationItem[] = [
     shortLabel: 'NT',
     path: '/tenant/notifications',
     description: 'View system updates and important alerts.',
+    portalLabel: appLabels.tenantPortal,
+  },
+  {
+    key: 'chat',
+    label: 'Chat',
+    shortLabel: 'CH',
+    path: '/tenant/chat',
+    description: 'Send realtime messages to your owner and other tenants.',
     portalLabel: appLabels.tenantPortal,
   },
 ]

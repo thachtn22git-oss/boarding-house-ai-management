@@ -8,6 +8,7 @@ import AdminOwnersPage from '../features/admin/pages/AdminOwnersPage'
 import AdminSystemOverviewPage from '../features/admin/pages/AdminSystemOverviewPage'
 import AdminTenantsPage from '../features/admin/pages/AdminTenantsPage'
 import AdminUsersPage from '../features/admin/pages/AdminUsersPage'
+import ChatPage from '../features/chat/pages/ChatPage'
 import AdminDashboardPage from '../pages/AdminDashboardPage'
 import AiAssistantPage from '../pages/AiAssistantPage'
 import ContractManagementPage from '../features/contracts/pages/ContractManagementPage'
@@ -87,6 +88,10 @@ export const router = createBrowserRouter([
         element: <NotificationCenterPage />,
       },
       {
+        path: 'chat',
+        element: <ChatPage />,
+      },
+      {
         path: 'analytics',
         element: <AnalyticsPage />,
       },
@@ -139,6 +144,10 @@ export const router = createBrowserRouter([
         element: <NotificationCenterPage />,
       },
       {
+        path: 'chat',
+        element: <ChatPage />,
+      },
+      {
         path: 'analytics',
         element: <AnalyticsPage />,
       },
@@ -189,6 +198,10 @@ export const router = createBrowserRouter([
       {
         path: 'notifications',
         element: <NotificationCenterPage />,
+      },
+      {
+        path: 'chat',
+        element: <ChatPage />,
       },
       {
         path: 'utilities',
