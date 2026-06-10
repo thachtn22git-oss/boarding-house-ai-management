@@ -1,44 +1,30 @@
-import { useRouter, type Href } from 'expo-router'
+import { usePathname, useRouter, type Href } from 'expo-router'
 import type { TenantTabKey } from '../../constants/navigation'
+
+const tenantTabRoutes: Record<TenantTabKey, Href> = {
+  home: '/tenant/home' as Href,
+  invoices: '/tenant/my-invoices' as Href,
+  feedback: '/tenant/my-feedback' as Href,
+  chat: '/tenant/chat' as Href,
+  notifications: '/tenant/notifications' as Href,
+  more: '/tenant/more' as Href,
+  room: '/tenant/my-room' as Href,
+  contract: '/tenant/my-contract' as Href,
+  utilities: '/tenant/my-utilities' as Href,
+  profile: '/tenant/profile' as Href,
+}
 
 export function useTenantNavigation() {
   const router = useRouter()
+  const pathname = usePathname()
 
   return (tab: TenantTabKey) => {
-    switch (tab) {
-      case 'home':
-        router.push('/tenant/home' as Href)
-        break
-      case 'invoices':
-        router.push('/tenant/my-invoices' as Href)
-        break
-      case 'feedback':
-        router.push('/tenant/my-feedback' as Href)
-        break
-      case 'chat':
-        router.push('/tenant/chat' as Href)
-        break
-      case 'notifications':
-        router.push('/tenant/notifications' as Href)
-        break
-      case 'room':
-        router.push('/tenant/my-room' as Href)
-        break
-      case 'contract':
-        router.push('/tenant/my-contract' as Href)
-        break
-      case 'utilities':
-        router.push('/tenant/my-utilities' as Href)
-        break
-      case 'profile':
-        router.push('/tenant/profile' as Href)
-        break
-      case 'more':
-        router.push('/tenant/more' as Href)
-        break
-      default:
-        router.push('/tenant/home' as Href)
-        break
+    const targetRoute = tenantTabRoutes[tab] ?? tenantTabRoutes.home
+
+    if (pathname === targetRoute) {
+      return
     }
+
+    router.replace(targetRoute)
   }
 }

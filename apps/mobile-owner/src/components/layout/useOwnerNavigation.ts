@@ -1,47 +1,31 @@
-import { useRouter, type Href } from 'expo-router'
+import { usePathname, useRouter, type Href } from 'expo-router'
 import type { OwnerTabKey } from '../../constants/navigation'
+
+const ownerTabRoutes: Record<OwnerTabKey, Href> = {
+  dashboard: '/owner/dashboard' as Href,
+  rooms: '/owner/rooms' as Href,
+  invoices: '/owner/invoices' as Href,
+  chat: '/owner/chat' as Href,
+  feedback: '/owner/feedback' as Href,
+  more: '/owner/more' as Href,
+  tenants: '/owner/tenants' as Href,
+  contracts: '/owner/contracts' as Href,
+  utilities: '/owner/utilities' as Href,
+  notifications: '/owner/notifications' as Href,
+  profile: '/owner/profile' as Href,
+}
 
 export function useOwnerNavigation() {
   const router = useRouter()
+  const pathname = usePathname()
 
   return (tab: OwnerTabKey) => {
-    switch (tab) {
-      case 'dashboard':
-        router.push('/owner/dashboard' as Href)
-        break
-      case 'rooms':
-        router.push('/owner/rooms' as Href)
-        break
-      case 'invoices':
-        router.push('/owner/invoices' as Href)
-        break
-      case 'chat':
-        router.push('/owner/chat' as Href)
-        break
-      case 'feedback':
-        router.push('/owner/feedback' as Href)
-        break
-      case 'tenants':
-        router.push('/owner/tenants' as Href)
-        break
-      case 'contracts':
-        router.push('/owner/contracts' as Href)
-        break
-      case 'utilities':
-        router.push('/owner/utilities' as Href)
-        break
-      case 'notifications':
-        router.push('/owner/notifications' as Href)
-        break
-      case 'profile':
-        router.push('/owner/profile' as Href)
-        break
-      case 'more':
-        router.push('/owner/more' as Href)
-        break
-      default:
-        router.push('/owner/dashboard' as Href)
-        break
+    const targetRoute = ownerTabRoutes[tab] ?? ownerTabRoutes.dashboard
+
+    if (pathname === targetRoute) {
+      return
     }
+
+    router.replace(targetRoute)
   }
 }
