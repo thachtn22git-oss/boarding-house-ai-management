@@ -14,6 +14,12 @@ export type FeedbackCategory =
 
 export type SentimentLabel = 'positive' | 'neutral' | 'negative'
 
+export interface FeedbackAIConfidence {
+  sentiment?: number
+  category?: number
+  priority?: number
+}
+
 export interface Feedback {
   id: string
   ownerId: string
@@ -28,6 +34,8 @@ export interface Feedback {
   aiGenerated?: boolean
   aiSuggestedCategory?: FeedbackCategory | null
   aiSuggestedPriority?: FeedbackPriority | null
+  aiConfidence?: FeedbackAIConfidence | null
+  aiError?: string | null
   aiSummary?: string | null
   ownerResponse?: string
   createdAt?: unknown

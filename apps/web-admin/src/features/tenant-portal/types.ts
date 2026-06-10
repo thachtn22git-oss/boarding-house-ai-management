@@ -18,3 +18,8 @@ export type TenantFeedbackFormValues = {
   title: string
   content: string
 }
+
+export type TenantFeedbackSubmitResult = {
+  id: string
+  aiUnavailable: boolean
+}

@@ -90,6 +90,7 @@ export type AnalyticsData = {
     negative: number
     positive: number
     neutral: number
+    pendingAI: number
     sentimentDistribution: ChartPoint[]
     categoryDistribution: ChartPoint[]
   }

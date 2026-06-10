@@ -13,6 +13,39 @@ type FeedbackViewModalProps = {
   tenant?: Tenant
   room?: Room
   onClose: () => void
+  onReanalyze?: () => void
+  reanalyzing?: boolean
+}
+
+function formatConfidence(value: number | undefined) {
+  if (typeof value !== 'number') {
+    return 'Not available'
+  }
+
+  return `${Math.round(value * 100)}%`
+}
+
+function ConfidenceRow({
+  label,
+  value,
+}: {
+  label: string
+  value: number | undefined
+}) {
+  const percent = typeof value === 'number' ? Math.round(value * 100) : 0
+
+  return (
+    <div className="feedback-confidence-row">
+      <span>{label}</span>
+      <div className="feedback-confidence-track" aria-hidden="true">
+        <div
+          className="feedback-confidence-fill"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <strong>{formatConfidence(value)}</strong>
+    </div>
+  )
 }
 
 function FeedbackViewModal({
@@ -20,6 +53,8 @@ function FeedbackViewModal({
   tenant,
   room,
   onClose,
+  onReanalyze,
+  reanalyzing = false,
 }: FeedbackViewModalProps) {
   const categoryLabel = feedback.aiSuggestedCategory
     ? getCategoryLabel(feedback.aiSuggestedCategory)
@@ -79,7 +114,11 @@ function FeedbackViewModal({
             </div>
             <div className="contract-summary-full feedback-ai-section-title">
               <dt>AI Analysis</dt>
-              <dd>AI-generated classification details for this feedback.</dd>
+              <dd>
+                {feedback.aiGenerated
+                  ? 'AI-generated classification details for this feedback.'
+                  : 'AI analysis is pending or unavailable for this feedback.'}
+              </dd>
             </div>
             <div>
               <dt>Sentiment</dt>
@@ -102,6 +141,29 @@ function FeedbackViewModal({
               <dd>{feedback.aiSummary || 'AI summary will be generated after analysis.'}</dd>
             </div>
             <div className="contract-summary-full">
+              <dt>Confidence</dt>
+              <dd className="feedback-confidence-list">
+                <ConfidenceRow
+                  label="Category"
+                  value={feedback.aiConfidence?.category}
+                />
+                <ConfidenceRow
+                  label="Sentiment"
+                  value={feedback.aiConfidence?.sentiment}
+                />
+                <ConfidenceRow
+                  label="Priority"
+                  value={feedback.aiConfidence?.priority}
+                />
+              </dd>
+            </div>
+            {feedback.aiError ? (
+              <div className="contract-summary-full">
+                <dt>AI Error</dt>
+                <dd className="feedback-ai-error">{feedback.aiError}</dd>
+              </div>
+            ) : null}
+            <div className="contract-summary-full">
               <dt>Owner response</dt>
               <dd>{feedback.ownerResponse || 'No response yet.'}</dd>
             </div>
@@ -112,6 +174,16 @@ function FeedbackViewModal({
           <button className="secondary-button" type="button" onClick={onClose}>
             Close
           </button>
+          {onReanalyze ? (
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={reanalyzing}
+              onClick={onReanalyze}
+            >
+              {reanalyzing ? 'Analyzing...' : 'Re-analyze with AI'}
+            </button>
+          ) : null}
           <button
             className="primary-button"
             type="button"

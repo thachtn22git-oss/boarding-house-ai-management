@@ -52,6 +52,16 @@
   font-weight: 700;
 }
 
+.room-success {
+  padding: 14px 16px;
+  border: 1px solid #bbf7d0;
+  border-radius: var(--radius-md);
+  color: #166534;
+  background: #f0fdf4;
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .room-table-card {
   overflow: hidden;
 }

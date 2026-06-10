@@ -37,6 +37,14 @@ function getAiPriorityLabel(feedback: Feedback) {
   return formatAiValue(feedback.priority ?? feedback.aiSuggestedPriority)
 }
 
+function formatConfidence(value: number | undefined) {
+  if (typeof value !== 'number') {
+    return 'Not available'
+  }
+
+  return `${Math.round(value * 100)}%`
+}
+
 function TenantFeedbackViewModal({
   feedback,
   onClose,
@@ -98,9 +106,27 @@ function TenantFeedbackViewModal({
               <dd>{feedback.aiSummary || 'AI summary will be generated after analysis.'}</dd>
             </div>
             <div>
+              <dt>Category Confidence</dt>
+              <dd>{formatConfidence(feedback.aiConfidence?.category)}</dd>
+            </div>
+            <div>
+              <dt>Sentiment Confidence</dt>
+              <dd>{formatConfidence(feedback.aiConfidence?.sentiment)}</dd>
+            </div>
+            <div>
+              <dt>Priority Confidence</dt>
+              <dd>{formatConfidence(feedback.aiConfidence?.priority)}</dd>
+            </div>
+            <div>
               <dt>AI Generated</dt>
               <dd>{feedback.aiGenerated ? 'Yes' : 'No'}</dd>
             </div>
+            {feedback.aiError ? (
+              <div className="tenant-detail-long">
+                <dt>AI Error</dt>
+                <dd>{feedback.aiError}</dd>
+              </div>
+            ) : null}
             <div>
               <dt>Created Date</dt>
               <dd>{formatDate(feedback.createdAt)}</dd>
@@ -126,6 +152,7 @@ function MyFeedbackPage() {
   const { data, isLoading, error, reload, submitFeedback } = useTenantPortalData()
   const [form, setForm] = useState<FeedbackFormState>(initialFeedbackForm)
   const [formError, setFormError] = useState('')
+  const [formNotice, setFormNotice] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null)
   const feedbacks = data?.feedbacks ?? []
@@ -145,13 +172,19 @@ function MyFeedbackPage() {
 
     setIsSubmitting(true)
     setFormError('')
+    setFormNotice('')
 
     try {
-      await submitFeedback({
+      const result = await submitFeedback({
         title: form.title.trim(),
         content: form.content.trim(),
       })
       setForm(initialFeedbackForm)
+      setFormNotice(
+        result.aiUnavailable
+          ? 'Feedback submitted, but AI analysis is currently unavailable.'
+          : 'Feedback submitted and analyzed by AI.',
+      )
     } catch {
       setFormError('Unable to submit feedback. Please try again.')
     } finally {
@@ -194,6 +227,7 @@ function MyFeedbackPage() {
           Describe your issue and AI will classify it automatically.
         </p>
         {formError ? <div className="room-error">{formError}</div> : null}
+        {formNotice ? <div className="room-success">{formNotice}</div> : null}
         <form className="tenant-feedback-form" onSubmit={handleSubmit}>
           <label className="room-form-field">
             <span>Title</span>
@@ -220,7 +254,7 @@ function MyFeedbackPage() {
           </label>
           <div className="room-form-actions">
             <button className="primary-button" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
+              {isSubmitting ? 'Analyzing...' : 'Submit Feedback'}
             </button>
           </div>
         </form>

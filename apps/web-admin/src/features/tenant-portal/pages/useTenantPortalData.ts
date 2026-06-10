@@ -5,14 +5,20 @@ import {
   createTenantFeedback,
   getCurrentTenant,
 } from '../services/tenantPortal.service'
-import type { TenantFeedbackFormValues, TenantPortalData } from '../types'
+import type {
+  TenantFeedbackFormValues,
+  TenantFeedbackSubmitResult,
+  TenantPortalData,
+} from '../types'
 
 type TenantPortalState = {
   data: TenantPortalData | null
   isLoading: boolean
   error: string
   reload: () => Promise<void>
-  submitFeedback: (values: TenantFeedbackFormValues) => Promise<void>
+  submitFeedback: (
+    values: TenantFeedbackFormValues,
+  ) => Promise<TenantFeedbackSubmitResult>
 }
 
 export function useTenantPortalData(): TenantPortalState {
@@ -51,8 +57,10 @@ export function useTenantPortalData(): TenantPortalState {
       throw new Error('No tenant profile was found for this account.')
     }
 
-    await createTenantFeedback(data.tenant, values)
+    const result = await createTenantFeedback(data.tenant, values)
     await reload()
+
+    return result
   }
 
   return {

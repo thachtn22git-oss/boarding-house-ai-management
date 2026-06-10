@@ -194,10 +194,16 @@ export function MyFeedbackScreen() {
 
     setSubmitting(true)
     try {
-      await createTenantFeedback(data.tenant, values)
+      const result = await createTenantFeedback(data.tenant, values)
       setTitle('')
       setContent('')
       await reload()
+      Alert.alert(
+        'Feedback Submitted',
+        result.aiUnavailable
+          ? 'Feedback submitted, but AI analysis is currently unavailable. If testing on a phone, use your computer LAN IP in EXPO_PUBLIC_AI_SERVER_URL.'
+          : 'Feedback submitted and analyzed by AI.',
+      )
     } catch (submitError) {
       console.warn('Tenant feedback creation failed.', submitError)
       setFormError('Unable to submit feedback.')
@@ -220,7 +226,7 @@ export function MyFeedbackScreen() {
           onChangeText={setContent}
         />
         {formError ? <Text style={styles.error}>{formError}</Text> : null}
-        <PrimaryButton disabled={submitting} label={submitting ? 'Submitting...' : 'Submit Feedback'} onPress={submitFeedback} />
+        <PrimaryButton disabled={submitting} label={submitting ? 'Analyzing...' : 'Submit Feedback'} onPress={submitFeedback} />
       </ListCard>
 
       {!data?.feedbacks.length ? <Text style={styles.empty}>No feedback found.</Text> : null}
@@ -309,12 +315,20 @@ function showFeedbackDetails(feedback: Feedback) {
       `Category: ${formatAiCategory(feedback)}`,
       `Priority: ${formatAiPriority(feedback)}`,
       `Sentiment: ${feedback.sentiment ?? 'Pending AI'}`,
+      `Category Confidence: ${formatConfidence(feedback.aiConfidence?.category)}`,
+      `Sentiment Confidence: ${formatConfidence(feedback.aiConfidence?.sentiment)}`,
+      `Priority Confidence: ${formatConfidence(feedback.aiConfidence?.priority)}`,
       `AI Generated: ${feedback.aiGenerated ? 'Yes' : 'No'}`,
+      `AI Error: ${feedback.aiError ?? 'Not available'}`,
       `Status: ${feedback.status}`,
       `Owner Response: ${feedback.ownerResponse ?? 'Not available'}`,
       `AI Summary: ${feedback.aiSummary ?? 'AI summary will be generated after analysis.'}`,
     ].join('\n\n'),
   )
+}
+
+function formatConfidence(value: number | undefined) {
+  return typeof value === 'number' ? `${Math.round(value * 100)}%` : 'Not available'
 }
 
 function formatAiCategory(feedback: Feedback) {

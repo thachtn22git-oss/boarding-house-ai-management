@@ -499,6 +499,10 @@ export function FeedbackScreen() {
                   `Category: ${formatAiCategory(feedback)}`,
                   `Priority: ${formatAiPriority(feedback)}`,
                   `Summary: ${feedback.aiSummary ?? 'AI summary will be generated after analysis.'}`,
+                  `Category Confidence: ${formatConfidence(feedback.aiConfidence?.category)}`,
+                  `Sentiment Confidence: ${formatConfidence(feedback.aiConfidence?.sentiment)}`,
+                  `Priority Confidence: ${formatConfidence(feedback.aiConfidence?.priority)}`,
+                  `AI Error: ${feedback.aiError ?? 'Not available'}`,
                 ].join(''))
               }
               variant="secondary"
@@ -933,6 +937,10 @@ function formatAiCategory(feedback: Feedback) {
 
 function formatAiPriority(feedback: Feedback) {
   return formatAiLabel(feedback.priority ?? feedback.aiSuggestedPriority)
+}
+
+function formatConfidence(value: number | undefined) {
+  return typeof value === 'number' ? `${Math.round(value * 100)}%` : 'Not available'
 }
 
 function capitalize(value: string) {

@@ -324,9 +324,13 @@ export function getFeedbackAnalytics(
   const positive = feedbacks.filter((feedback) => feedback.data.sentiment === 'positive').length
   const neutral = feedbacks.filter((feedback) => feedback.data.sentiment === 'neutral').length
   const negative = feedbacks.filter((feedback) => feedback.data.sentiment === 'negative').length
+  const pendingAI = feedbacks.filter((feedback) => !feedback.data.sentiment).length
   const categoryGroups = groupSumBy(
     feedbacks,
-    (feedback) => normalizeFeedbackCategory(feedback.data.category),
+    (feedback) =>
+      normalizeFeedbackCategory(
+        feedback.data.aiSuggestedCategory ?? feedback.data.category,
+      ),
     () => 1,
   )
 
@@ -337,10 +341,12 @@ export function getFeedbackAnalytics(
     negative,
     positive,
     neutral,
+    pendingAI,
     sentimentDistribution: [
       { label: 'Positive', value: positive },
       { label: 'Neutral', value: neutral },
       { label: 'Negative', value: negative },
+      { label: 'Pending AI', value: pendingAI },
     ],
     categoryDistribution: ['Maintenance', 'Utilities', 'Internet', 'Security', 'Noise', 'Other'].map(
       (label) => ({ label, value: categoryGroups.get(label) ?? 0 }),

@@ -16,7 +16,9 @@ import {
   rejectFeedback,
   resolveFeedback,
   updateFeedback,
+  updateFeedbackAIAnalysis,
 } from '../services/feedback.service'
+import { analyzeFeedbackWithAI } from '../services/feedback-ai.service'
 import type {
   Feedback,
   FeedbackCategory,
@@ -49,6 +51,28 @@ function getAiPriorityLabel(feedback: Feedback) {
   return priority ? getPriorityLabel(priority) : 'Pending AI'
 }
 
+function getAiCategoryValue(feedback: Feedback) {
+  if (feedback.aiSuggestedCategory) {
+    return feedback.aiSuggestedCategory
+  }
+
+  return feedback.category && feedback.category !== 'other'
+    ? feedback.category
+    : null
+}
+
+function getAiSourceLabel(feedback: Feedback) {
+  return feedback.aiGenerated ? 'AI' : 'Manual Review'
+}
+
+function needsAIAnalysis(feedback: Feedback) {
+  return (
+    !feedback.sentiment ||
+    !getAiCategoryValue(feedback) ||
+    !(feedback.priority ?? feedback.aiSuggestedPriority)
+  )
+}
+
 function FeedbackManagementPage() {
   const { currentUser } = useAuth()
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([])
@@ -57,6 +81,11 @@ function FeedbackManagementPage() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [reanalyzingFeedbackId, setReanalyzingFeedbackId] = useState<string | null>(
+    null,
+  )
+  const [bulkAnalyzing, setBulkAnalyzing] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingFeedback, setEditingFeedback] = useState<Feedback | null>(null)
   const [viewingFeedback, setViewingFeedback] = useState<Feedback | null>(null)
@@ -122,6 +151,7 @@ function FeedbackManagementPage() {
       ).length,
       urgent: ownerFeedbacks.filter((feedback) => feedback.priority === 'urgent')
         .length,
+      pendingAI: ownerFeedbacks.filter((feedback) => needsAIAnalysis(feedback)).length,
     }),
     [ownerFeedbacks],
   )
@@ -135,6 +165,7 @@ function FeedbackManagementPage() {
 
     setLoading(true)
     setError(null)
+    setNotice(null)
 
     try {
       const [nextFeedbacks, nextRooms, nextTenants] = await Promise.all([
@@ -179,6 +210,7 @@ function FeedbackManagementPage() {
 
     setSubmitting(true)
     setError(null)
+    setNotice(null)
 
     try {
       if (editingFeedback) {
@@ -270,6 +302,90 @@ function FeedbackManagementPage() {
     }
   }
 
+  async function handleReanalyze(feedback: Feedback) {
+    if (!currentUser || feedback.ownerId !== currentUser.uid) {
+      setError('You can only analyze your own feedback.')
+      return
+    }
+
+    setReanalyzingFeedbackId(feedback.id)
+    setError(null)
+    setNotice(null)
+
+    try {
+      const analysis = await analyzeFeedbackWithAI(feedback.content)
+      await updateFeedbackAIAnalysis(feedback.id, analysis)
+      await loadFeedbackData()
+      setViewingFeedback((current) =>
+        current?.id === feedback.id
+          ? {
+              ...current,
+              category: analysis.category,
+              priority: analysis.priority,
+              sentiment: analysis.sentiment,
+              aiGenerated: true,
+              aiSummary: analysis.summary || null,
+              aiSuggestedCategory: analysis.category,
+              aiSuggestedPriority: analysis.priority,
+              aiConfidence: analysis.confidence,
+              aiError: null,
+            }
+          : current,
+      )
+      setNotice('Feedback analyzed successfully.')
+    } catch {
+      setError('AI analysis failed. Please try again.')
+    } finally {
+      setReanalyzingFeedbackId(null)
+    }
+  }
+
+  async function handleAnalyzePending() {
+    if (!currentUser) {
+      setError('You must be signed in to analyze feedback.')
+      return
+    }
+
+    const pendingFeedbacks = ownerFeedbacks
+      .filter((feedback) => needsAIAnalysis(feedback))
+      .slice(0, 10)
+
+    if (pendingFeedbacks.length === 0) {
+      setNotice('No pending feedback needs AI analysis.')
+      return
+    }
+
+    setBulkAnalyzing(true)
+    setError(null)
+    setNotice(null)
+
+    let analyzedCount = 0
+    let failedCount = 0
+
+    for (const feedback of pendingFeedbacks) {
+      try {
+        const analysis = await analyzeFeedbackWithAI(feedback.content)
+        await updateFeedbackAIAnalysis(feedback.id, analysis)
+        analyzedCount += 1
+      } catch (analysisError) {
+        failedCount += 1
+        console.warn('Bulk feedback AI analysis failed.', analysisError)
+      }
+    }
+
+    await loadFeedbackData()
+    setBulkAnalyzing(false)
+
+    if (failedCount > 0) {
+      setError(
+        `Analyzed ${analyzedCount} feedback item(s). ${failedCount} item(s) could not be analyzed.`,
+      )
+      return
+    }
+
+    setNotice(`Analyzed ${analyzedCount} feedback item(s).`)
+  }
+
   const selectedTenant = viewingFeedback?.tenantId
     ? tenantById.get(viewingFeedback.tenantId)
     : undefined
@@ -283,10 +399,10 @@ function FeedbackManagementPage() {
         <button
           className="secondary-button"
           type="button"
-          disabled
-          title="AI analysis coming soon"
+          disabled={bulkAnalyzing || stats.pendingAI === 0}
+          onClick={() => void handleAnalyzePending()}
         >
-          AI analysis coming soon
+          {bulkAnalyzing ? 'Analyzing...' : 'Analyze Pending Feedback'}
         </button>
         <button className="primary-button" type="button" onClick={openCreateModal}>
           Add Feedback
@@ -294,8 +410,8 @@ function FeedbackManagementPage() {
       </div>
 
       <div className="feedback-ai-panel">
-        AI analysis will classify sentiment, detect issue category, and suggest
-        priority in a later phase.
+        AI analysis classifies sentiment, detects issue category, suggests
+        priority, and saves confidence scores for review.
       </div>
 
       <div className="stats-grid utilities-stats-grid">
@@ -384,6 +500,7 @@ function FeedbackManagementPage() {
       </section>
 
       {error ? <div className="room-error">{error}</div> : null}
+      {notice ? <div className="room-success">{notice}</div> : null}
 
       <section className="dashboard-card room-table-card">
         {loading ? (
@@ -404,9 +521,9 @@ function FeedbackManagementPage() {
                   <th>Title</th>
                   <th>Tenant</th>
                   <th>Room</th>
-                  <th>Category</th>
-                  <th>AI Priority</th>
                   <th>AI Sentiment</th>
+                  <th>AI Category</th>
+                  <th>AI Priority</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -419,6 +536,7 @@ function FeedbackManagementPage() {
                   const room = feedback.roomId
                     ? roomById.get(feedback.roomId)
                     : undefined
+                  const category = getAiCategoryValue(feedback)
 
                   return (
                     <tr key={feedback.id}>
@@ -426,23 +544,36 @@ function FeedbackManagementPage() {
                       <td>{tenant?.fullName ?? '-'}</td>
                       <td>{room ? `${room.roomNumber} - ${room.roomType}` : '-'}</td>
                       <td>
-                        {feedback.aiSuggestedCategory ? (
+                        {feedback.sentiment ? (
                           <span
-                            className={`status-badge feedback-category-badge--${feedback.aiSuggestedCategory}`}
+                            className={`status-badge feedback-sentiment-badge--${feedback.sentiment}`}
                           >
-                            {getCategoryLabel(feedback.aiSuggestedCategory)}
-                          </span>
-                        ) : feedback.category && feedback.category !== 'other' ? (
-                          <span
-                            className={`status-badge feedback-category-badge--${feedback.category}`}
-                          >
-                            {getCategoryLabel(feedback.category)}
+                            {getSentimentLabel(feedback.sentiment)}
                           </span>
                         ) : (
                           <span className="status-badge feedback-ai-pending-badge">
                             Pending AI
                           </span>
                         )}
+                        <span className="feedback-ai-source-badge">
+                          {getAiSourceLabel(feedback)}
+                        </span>
+                      </td>
+                      <td>
+                        {category ? (
+                          <span
+                            className={`status-badge feedback-category-badge--${category}`}
+                          >
+                            {getCategoryLabel(category)}
+                          </span>
+                        ) : (
+                          <span className="status-badge feedback-ai-pending-badge">
+                            Pending AI
+                          </span>
+                        )}
+                        <span className="feedback-ai-source-badge">
+                          {getAiSourceLabel(feedback)}
+                        </span>
                       </td>
                       <td>
                         {feedback.priority || feedback.aiSuggestedPriority ? (
@@ -456,19 +587,9 @@ function FeedbackManagementPage() {
                             Pending AI
                           </span>
                         )}
-                      </td>
-                      <td>
-                        {feedback.sentiment ? (
-                          <span
-                            className={`status-badge feedback-sentiment-badge--${feedback.sentiment}`}
-                          >
-                            {getSentimentLabel(feedback.sentiment)}
-                          </span>
-                        ) : (
-                          <span className="status-badge feedback-ai-pending-badge">
-                            Pending AI
-                          </span>
-                        )}
+                        <span className="feedback-ai-source-badge">
+                          {getAiSourceLabel(feedback)}
+                        </span>
                       </td>
                       <td>
                         <span
@@ -563,6 +684,8 @@ function FeedbackManagementPage() {
           tenant={selectedTenant}
           room={selectedRoom}
           onClose={() => setViewingFeedback(null)}
+          onReanalyze={() => void handleReanalyze(viewingFeedback)}
+          reanalyzing={reanalyzingFeedbackId === viewingFeedback.id}
         />
       ) : null}
     </div>

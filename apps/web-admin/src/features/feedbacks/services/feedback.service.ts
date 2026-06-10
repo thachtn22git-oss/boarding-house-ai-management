@@ -15,8 +15,10 @@ import {
 import { db } from '../../../config/firebase'
 import { createNotification } from '../../notifications/services/notification.service'
 import { getUserUidByEmail } from '../../notifications/services/user-resolution.service'
+import type { FeedbackAIResult } from './feedback-ai.service'
 import type {
   Feedback,
+  FeedbackAIConfidence,
   FeedbackCategory,
   FeedbackFormValues,
   FeedbackPriority,
@@ -61,6 +63,21 @@ function isSentimentLabel(value: unknown): value is SentimentLabel {
   return value === 'positive' || value === 'neutral' || value === 'negative'
 }
 
+function mapAIConfidence(value: unknown): FeedbackAIConfidence | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+
+  const raw = value as Record<string, unknown>
+
+  return {
+    sentiment:
+      typeof raw.sentiment === 'number' ? raw.sentiment : undefined,
+    category: typeof raw.category === 'number' ? raw.category : undefined,
+    priority: typeof raw.priority === 'number' ? raw.priority : undefined,
+  }
+}
+
 function mapFeedbackDocument(
   documentId: string,
   data: Record<string, unknown>,
@@ -83,6 +100,8 @@ function mapFeedbackDocument(
     aiSuggestedPriority: isFeedbackPriority(data.aiSuggestedPriority)
       ? data.aiSuggestedPriority
       : null,
+    aiConfidence: mapAIConfidence(data.aiConfidence),
+    aiError: typeof data.aiError === 'string' ? data.aiError : null,
     aiSummary: typeof data.aiSummary === 'string' ? data.aiSummary : null,
     ownerResponse:
       typeof data.ownerResponse === 'string' ? data.ownerResponse : undefined,
@@ -212,6 +231,24 @@ export async function updateFeedback(
     roomId: values.roomId || null,
     sentiment: values.sentiment || null,
     ownerResponse: values.ownerResponse || null,
+    updatedAt: serverTimestamp(),
+  })
+}
+
+export async function updateFeedbackAIAnalysis(
+  feedbackId: string,
+  analysis: FeedbackAIResult,
+): Promise<void> {
+  await updateDoc(doc(db, 'feedbacks', feedbackId), {
+    category: analysis.category,
+    priority: analysis.priority,
+    sentiment: analysis.sentiment,
+    aiGenerated: true,
+    aiSummary: analysis.summary || null,
+    aiSuggestedCategory: analysis.category,
+    aiSuggestedPriority: analysis.priority,
+    aiConfidence: analysis.confidence,
+    aiError: null,
     updatedAt: serverTimestamp(),
   })
 }

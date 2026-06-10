@@ -15,11 +15,16 @@ import type { AppUser } from '../../../types/user'
 import type { Contract, ContractStatus } from '../../contracts/types'
 import type {
   Feedback,
+  FeedbackAIConfidence,
   FeedbackCategory,
   FeedbackPriority,
   FeedbackStatus,
   SentimentLabel,
 } from '../../feedbacks/types'
+import {
+  analyzeFeedbackWithAI,
+  type FeedbackAIResult,
+} from '../../feedbacks/services/feedback-ai.service'
 import type { Invoice, InvoiceItem, InvoiceStatus } from '../../invoices/types'
 import { createNotification } from '../../notifications/services/notification.service'
 import type { Room, RoomStatus } from '../../rooms/types'
@@ -29,7 +34,11 @@ import type {
   UtilityReadingStatus,
   UtilityType,
 } from '../../utilities/types'
-import type { TenantFeedbackFormValues, TenantPortalData } from '../types'
+import type {
+  TenantFeedbackFormValues,
+  TenantFeedbackSubmitResult,
+  TenantPortalData,
+} from '../types'
 
 const tenantsCollection = collection(db, 'tenants')
 const contractsCollection = collection(db, 'contracts')
@@ -100,6 +109,21 @@ function isFeedbackStatus(value: unknown): value is FeedbackStatus {
 
 function isSentimentLabel(value: unknown): value is SentimentLabel {
   return value === 'positive' || value === 'neutral' || value === 'negative'
+}
+
+function mapAIConfidence(value: unknown): FeedbackAIConfidence | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+
+  const raw = value as Record<string, unknown>
+
+  return {
+    sentiment:
+      typeof raw.sentiment === 'number' ? raw.sentiment : undefined,
+    category: typeof raw.category === 'number' ? raw.category : undefined,
+    priority: typeof raw.priority === 'number' ? raw.priority : undefined,
+  }
 }
 
 function mapRoomDocument(documentId: string, data: DocumentData): Room {
@@ -226,6 +250,8 @@ function mapFeedbackDocument(documentId: string, data: DocumentData): Feedback {
     aiSuggestedPriority: isFeedbackPriority(data.aiSuggestedPriority)
       ? data.aiSuggestedPriority
       : null,
+    aiConfidence: mapAIConfidence(data.aiConfidence),
+    aiError: typeof data.aiError === 'string' ? data.aiError : null,
     aiSummary: typeof data.aiSummary === 'string' ? data.aiSummary : null,
     ownerResponse:
       typeof data.ownerResponse === 'string' ? data.ownerResponse : undefined,
@@ -371,19 +397,48 @@ function getActiveContract(contracts: Contract[]) {
 async function createOwnerFeedbackNotification(
   tenant: Tenant,
   values: TenantFeedbackFormValues,
+  priority: FeedbackPriority,
 ) {
   try {
     await createNotification({
       userId: tenant.ownerId,
       role: 'owner',
       type: 'feedback',
-      priority: 'medium',
+      priority,
       title: 'New Tenant Feedback',
       message: `${tenant.fullName} submitted new feedback: ${values.title}`,
       actionUrl: '/owner/feedback',
     })
   } catch (error) {
     console.error('Failed to create owner notification for tenant feedback.', error)
+  }
+}
+
+function getFeedbackAIFields(analysis: FeedbackAIResult | null) {
+  if (!analysis) {
+    return {
+      category: 'other' as const,
+      priority: null,
+      sentiment: null,
+      aiGenerated: false,
+      aiSummary: null,
+      aiSuggestedCategory: null,
+      aiSuggestedPriority: null,
+      aiConfidence: null,
+      aiError: 'AI analysis unavailable',
+    }
+  }
+
+  return {
+    category: analysis.category,
+    priority: analysis.priority,
+    sentiment: analysis.sentiment,
+    aiGenerated: true,
+    aiSummary: analysis.summary || null,
+    aiSuggestedCategory: analysis.category,
+    aiSuggestedPriority: analysis.priority,
+    aiConfidence: analysis.confidence,
+    aiError: null,
   }
 }
 
@@ -424,26 +479,35 @@ export async function getCurrentTenant(
 export async function createTenantFeedback(
   tenant: Tenant,
   values: TenantFeedbackFormValues,
-): Promise<string> {
+): Promise<TenantFeedbackSubmitResult> {
+  let analysis: FeedbackAIResult | null = null
+
+  try {
+    analysis = await analyzeFeedbackWithAI(values.content)
+  } catch (error) {
+    console.warn('Tenant feedback submitted without AI analysis.', error)
+  }
+
   const feedbackRef = await addDoc(feedbacksCollection, {
     ownerId: tenant.ownerId,
     tenantId: tenant.id,
     roomId: tenant.roomId || null,
     title: values.title,
     content: values.content,
-    category: 'other',
-    priority: null,
-    sentiment: null,
+    ...getFeedbackAIFields(analysis),
     status: 'new',
-    aiGenerated: false,
-    aiSummary: null,
-    aiSuggestedCategory: null,
-    aiSuggestedPriority: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
 
-  await createOwnerFeedbackNotification(tenant, values)
+  await createOwnerFeedbackNotification(
+    tenant,
+    values,
+    analysis?.priority ?? 'medium',
+  )
 
-  return feedbackRef.id
+  return {
+    id: feedbackRef.id,
+    aiUnavailable: !analysis,
+  }
 }

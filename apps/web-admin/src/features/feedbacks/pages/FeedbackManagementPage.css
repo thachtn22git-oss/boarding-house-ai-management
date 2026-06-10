@@ -171,6 +171,54 @@
   font-weight: 600;
 }
 
+.feedback-ai-source-badge {
+  display: block;
+  width: max-content;
+  margin-top: 6px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: #1e40af;
+  background: #dbeafe;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.feedback-confidence-list {
+  display: grid;
+  gap: 10px;
+}
+
+.feedback-confidence-row {
+  display: grid;
+  grid-template-columns: 90px minmax(120px, 1fr) 80px;
+  align-items: center;
+  gap: 10px;
+}
+
+.feedback-confidence-row span,
+.feedback-confidence-row strong {
+  color: #334155;
+  font-size: 13px;
+}
+
+.feedback-confidence-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.feedback-confidence-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-primary);
+}
+
+.feedback-ai-error {
+  color: #991b1b;
+  font-weight: 800;
+}
+
 @media (max-width: 900px) {
   .feedback-filter-card,
   .feedback-form {

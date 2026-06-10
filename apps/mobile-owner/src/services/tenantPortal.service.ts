@@ -3,12 +3,17 @@ import { db } from '../config/firebase'
 import type {
   Contract,
   Feedback,
+  FeedbackPriority,
   Invoice,
   Room,
   Tenant,
   UtilityReading,
 } from '../types/models'
 import type { AppUser } from '../types/user'
+import {
+  analyzeFeedbackWithAI,
+  type FeedbackAIResult,
+} from '../features/feedback/services/feedback-ai.service'
 import { getNotifications } from './notification.service'
 
 export interface TenantPortalData {
@@ -25,6 +30,10 @@ export interface TenantPortalData {
 export interface TenantFeedbackValues {
   title: string
   content: string
+}
+
+export interface TenantFeedbackResult {
+  aiUnavailable: boolean
 }
 
 function mapDoc<T>(item: { id: string; data: () => Record<string, unknown> }) {
@@ -76,21 +85,54 @@ export async function getCurrentTenant(currentUser: AppUser): Promise<TenantPort
   }
 }
 
-export async function createTenantFeedback(tenant: Tenant, values: TenantFeedbackValues) {
+function getFeedbackAIFields(analysis: FeedbackAIResult | null) {
+  if (!analysis) {
+    return {
+      category: 'other' as const,
+      priority: null,
+      sentiment: null,
+      aiGenerated: false,
+      aiSummary: null,
+      aiSuggestedCategory: null,
+      aiSuggestedPriority: null,
+      aiConfidence: null,
+      aiError: 'AI analysis unavailable',
+    }
+  }
+
+  return {
+    category: analysis.category,
+    priority: analysis.priority,
+    sentiment: analysis.sentiment,
+    aiGenerated: true,
+    aiSummary: analysis.summary || null,
+    aiSuggestedCategory: analysis.category,
+    aiSuggestedPriority: analysis.priority,
+    aiConfidence: analysis.confidence,
+    aiError: null,
+  }
+}
+
+export async function createTenantFeedback(
+  tenant: Tenant,
+  values: TenantFeedbackValues,
+): Promise<TenantFeedbackResult> {
+  let analysis: FeedbackAIResult | null = null
+
+  try {
+    analysis = await analyzeFeedbackWithAI(values.content)
+  } catch (error) {
+    console.warn('Tenant feedback submitted without AI analysis.', error)
+  }
+
   await addDoc(collection(db, 'feedbacks'), {
     ownerId: tenant.ownerId,
     tenantId: tenant.id,
     roomId: tenant.roomId,
     title: values.title,
     content: values.content,
-    category: 'other',
-    priority: null,
-    sentiment: null,
+    ...getFeedbackAIFields(analysis),
     status: 'new',
-    aiGenerated: false,
-    aiSummary: null,
-    aiSuggestedCategory: null,
-    aiSuggestedPriority: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
@@ -100,7 +142,7 @@ export async function createTenantFeedback(tenant: Tenant, values: TenantFeedbac
       userId: tenant.ownerId,
       role: 'owner',
       type: 'feedback',
-      priority: 'medium',
+      priority: (analysis?.priority ?? 'medium') as FeedbackPriority,
       title: 'New Tenant Feedback',
       message: `${tenant.fullName} submitted new feedback: ${values.title}`,
       read: false,
@@ -110,6 +152,10 @@ export async function createTenantFeedback(tenant: Tenant, values: TenantFeedbac
     })
   } catch (notificationError) {
     console.warn('Owner notification creation failed after tenant feedback submission.', notificationError)
+  }
+
+  return {
+    aiUnavailable: !analysis,
   }
 }
 
