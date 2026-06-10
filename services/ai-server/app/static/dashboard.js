@@ -7,7 +7,14 @@ const examples = [
   "The door lock is broken.",
 ];
 
-const chartInstances = {};
+const charts = {
+  sentimentDistribution: null,
+  categoryDistribution: null,
+  priorityDistribution: null,
+  modelPerformance: null,
+};
+
+let dashboardInitialized = false;
 
 function titleCase(value) {
   return String(value || "")
@@ -156,17 +163,20 @@ function chartColors(labels) {
   return labels.map((label) => palette[label] || "#2563EB");
 }
 
-function createChart(id, config) {
-  if (chartInstances[id]) {
-    chartInstances[id].destroy();
+function createChart(chartKey, canvasId, config) {
+  if (charts[chartKey]) {
+    charts[chartKey].destroy();
   }
-  chartInstances[id] = new Chart(document.getElementById(id), config);
+  charts[chartKey] = new Chart(document.getElementById(canvasId), config);
 }
 
-function renderDistributionChart(id, type, distribution, label) {
+function renderDistributionChart(chartKey, canvasId, type, distribution, label, options = {}) {
   const labels = Object.keys(distribution);
   const values = Object.values(distribution);
-  createChart(id, {
+  const isBarChart = type === "bar";
+  const isHorizontal = options.horizontal === true;
+
+  createChart(chartKey, canvasId, {
     type,
     data: {
       labels: labels.map(titleCase),
@@ -182,15 +192,33 @@ function renderDistributionChart(id, type, distribution, label) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { position: "bottom" } },
-      scales: type === "bar" ? { y: { beginAtZero: true } } : undefined,
+      indexAxis: isHorizontal ? "y" : "x",
+      plugins: {
+        legend: {
+          display: !isBarChart,
+          position: "bottom",
+        },
+      },
+      scales: isBarChart
+        ? {
+            x: {
+              beginAtZero: true,
+            },
+            y: {
+              beginAtZero: !isHorizontal,
+              ticks: {
+                autoSkip: false,
+              },
+            },
+          }
+        : undefined,
     },
   });
 }
 
 function renderPerformanceChart(metrics) {
   const tasks = ["sentiment", "category", "priority"];
-  createChart("performance-chart", {
+  createChart("modelPerformance", "performance-chart", {
     type: "bar",
     data: {
       labels: tasks.map(titleCase),
@@ -218,7 +246,7 @@ function renderPerformanceChart(metrics) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { position: "bottom" } },
+      plugins: { legend: { display: true, position: "bottom" } },
       scales: { y: { beginAtZero: true, max: 1 } },
     },
   });
@@ -253,9 +281,28 @@ async function loadDashboardData() {
 
   document.getElementById("dataset-size").textContent = `${stats.total_rows} dataset rows`;
   renderModelFiles(info);
-  renderDistributionChart("sentiment-chart", "pie", stats.sentiment_distribution, "Sentiment");
-  renderDistributionChart("category-chart", "bar", stats.category_distribution, "Category");
-  renderDistributionChart("priority-chart", "pie", stats.priority_distribution, "Priority");
+  renderDistributionChart(
+    "sentimentDistribution",
+    "sentiment-chart",
+    "pie",
+    stats.sentiment_distribution,
+    "Sentiment",
+  );
+  renderDistributionChart(
+    "categoryDistribution",
+    "category-chart",
+    "bar",
+    stats.category_distribution,
+    "Category",
+    { horizontal: true },
+  );
+  renderDistributionChart(
+    "priorityDistribution",
+    "priority-chart",
+    "pie",
+    stats.priority_distribution,
+    "Priority",
+  );
 
   if (!metrics.message) {
     renderPerformanceChart(metrics);
@@ -263,6 +310,11 @@ async function loadDashboardData() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  if (dashboardInitialized) {
+    return;
+  }
+  dashboardInitialized = true;
+
   renderExamples();
   document.getElementById("analyze-button").addEventListener("click", analyzeFeedback);
   loadDashboardData().catch((error) => {

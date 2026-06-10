@@ -385,17 +385,32 @@ textarea::placeholder {
 }
 
 .chart-card {
-  min-height: 310px;
+  display: flex;
+  flex-direction: column;
+  height: 280px;
+  max-height: 320px;
+  min-height: 0;
   padding: 18px;
+  position: relative;
 }
 
 .chart-card h3 {
+  flex: 0 0 auto;
   font-size: 16px;
   margin: 0 0 12px;
 }
 
 .chart-card.wide {
-  min-height: 360px;
+  height: 340px;
+  max-height: 380px;
+}
+
+.chart-card canvas {
+  flex: 1 1 auto;
+  height: 100% !important;
+  max-height: 100%;
+  min-height: 0;
+  width: 100% !important;
 }
 
 .example-grid {
