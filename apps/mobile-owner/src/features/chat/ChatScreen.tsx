@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   Alert,
   FlatList,
@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../../providers/AuthProvider'
 import { colors, spacing } from '../../constants/theme'
 import type { ChatMessage, ChatRoom } from './chat.types'
@@ -25,6 +25,37 @@ import {
 
 interface ChatScreenProps {
   initialRoomId?: string
+}
+
+interface ChatRoomLayoutProps {
+  header: ReactNode
+  children: ReactNode
+  composer: ReactNode
+}
+
+function ChatRoomLayout({ header, children, composer }: ChatRoomLayoutProps) {
+  const insets = useSafeAreaInsets()
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={90}
+        style={styles.roomContainer}
+      >
+        {header}
+        <View style={styles.messagesArea}>{children}</View>
+        <View
+          style={[
+            styles.composer,
+            { paddingBottom: Math.max(insets.bottom, 12) },
+          ]}
+        >
+          {composer}
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  )
 }
 
 export function ChatScreen({ initialRoomId }: ChatScreenProps) {
@@ -151,8 +182,8 @@ export function ChatScreen({ initialRoomId }: ChatScreenProps) {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.roomContainer}>
+    <ChatRoomLayout
+      header={
         <View style={styles.chatHeader}>
           <Pressable onPress={() => setSelectedRoomId(null)}>
             <Text style={styles.back}>Back</Text>
@@ -162,13 +193,31 @@ export function ChatScreen({ initialRoomId }: ChatScreenProps) {
             <Text style={styles.subtitle}>{selectedRoom.type === 'owner_tenant' ? 'Owner and tenant' : 'Tenant conversation'}</Text>
           </View>
         </View>
+      }
+      composer={
+        <>
+          <TextInput
+            multiline
+            value={messageText}
+            placeholder="Type a message"
+            placeholderTextColor={colors.muted}
+            style={styles.input}
+            onChangeText={setMessageText}
+          />
+          <Pressable disabled={sending || !messageText.trim()} style={[styles.sendButton, sending || !messageText.trim() ? styles.disabled : null]} onPress={() => void handleSend()}>
+            <Text style={styles.sendText}>{sending ? 'Sending' : 'Send'}</Text>
+          </Pressable>
+        </>
+      }
+    >
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {loadingMessages ? <Text style={styles.empty}>Loading messages...</Text> : null}
         <FlatList
           ref={listRef}
           data={messages}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.messageList}
+          style={styles.messageListScroll}
+          contentContainerStyle={styles.messageListContent}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
           renderItem={({ item }) => {
             const isOwn = item.senderId === currentUser?.uid
@@ -183,21 +232,7 @@ export function ChatScreen({ initialRoomId }: ChatScreenProps) {
             )
           }}
         />
-        <View style={styles.composer}>
-          <TextInput
-            multiline
-            value={messageText}
-            placeholder="Type a message"
-            placeholderTextColor={colors.muted}
-            style={styles.input}
-            onChangeText={setMessageText}
-          />
-          <Pressable disabled={sending || !messageText.trim()} style={[styles.sendButton, sending || !messageText.trim() ? styles.disabled : null]} onPress={() => void handleSend()}>
-            <Text style={styles.sendText}>{sending ? 'Sending' : 'Send'}</Text>
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    </ChatRoomLayout>
   )
 }
 
@@ -222,7 +257,9 @@ const styles = StyleSheet.create({
   chatHeader: { alignItems: 'center', backgroundColor: colors.surface, borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: 'row', gap: spacing.md, padding: spacing.lg },
   chatHeaderCopy: { flex: 1 },
   back: { color: colors.primary, fontSize: 15, fontWeight: '800' },
-  messageList: { gap: spacing.sm, padding: spacing.lg },
+  messagesArea: { flex: 1, backgroundColor: colors.background },
+  messageListScroll: { flex: 1 },
+  messageListContent: { gap: spacing.sm, padding: 16, paddingBottom: 24 },
   messageRow: { alignItems: 'flex-start' },
   ownMessageRow: { alignItems: 'flex-end' },
   messageBubble: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 16, borderWidth: 1, maxWidth: '82%', padding: spacing.md },
@@ -232,7 +269,7 @@ const styles = StyleSheet.create({
   ownMessageText: { color: colors.surface },
   messageTime: { color: colors.muted, fontSize: 11, marginTop: spacing.xs },
   ownMessageTime: { color: '#DBEAFE' },
-  composer: { backgroundColor: colors.surface, borderTopColor: colors.border, borderTopWidth: 1, flexDirection: 'row', gap: spacing.sm, padding: spacing.md },
+  composer: { backgroundColor: colors.surface, borderTopColor: colors.border, borderTopWidth: 1, flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.md },
   input: { borderColor: colors.border, borderRadius: 16, borderWidth: 1, color: colors.text, flex: 1, maxHeight: 110, minHeight: 46, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   sendButton: { alignItems: 'center', alignSelf: 'flex-end', backgroundColor: colors.primary, borderRadius: 14, justifyContent: 'center', minHeight: 46, paddingHorizontal: spacing.lg },
   disabled: { opacity: 0.5 },
