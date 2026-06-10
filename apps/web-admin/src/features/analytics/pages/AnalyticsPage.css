@@ -1,0 +1,87 @@
+@import '../../rooms/pages/RoomManagementPage.css';
+
+.analytics-page {
+  display: grid;
+  gap: 22px;
+}
+
+.analytics-toolbar {
+  display: grid;
+  grid-template-columns: 220px repeat(2, 180px) minmax(280px, 1fr);
+  gap: 14px;
+  padding: 16px;
+}
+
+.analytics-toolbar label {
+  display: grid;
+  gap: 8px;
+}
+
+.analytics-toolbar span {
+  color: #374151;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.analytics-toolbar select,
+.analytics-toolbar input {
+  min-height: 40px;
+  border: 1px solid #d1d5db;
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.analytics-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.analytics-chart-card {
+  display: grid;
+  gap: 16px;
+  min-height: 360px;
+  padding: 20px;
+}
+
+.analytics-chart-card h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 18px;
+}
+
+.analytics-chart-card p {
+  margin: -8px 0 0;
+  color: var(--color-muted);
+  font-size: 14px;
+}
+
+.analytics-chart-wrap {
+  width: 100%;
+  min-height: 260px;
+}
+
+.analytics-table {
+  min-width: 780px;
+}
+
+@media (max-width: 1100px) {
+  .analytics-toolbar,
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-export-actions {
+    justify-content: flex-start;
+  }
+}

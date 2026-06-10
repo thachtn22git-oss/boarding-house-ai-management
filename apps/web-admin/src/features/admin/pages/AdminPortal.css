@@ -1,0 +1,126 @@
+@import '../../rooms/pages/RoomManagementPage.css';
+
+.admin-portal-page {
+  display: grid;
+  gap: 20px;
+}
+
+.admin-filter-card {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) 220px;
+  gap: 14px;
+  padding: 16px;
+}
+
+.admin-filter-card label {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-filter-card span {
+  color: #374151;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.admin-filter-card input,
+.admin-filter-card select,
+.admin-edit-form input,
+.admin-edit-form select {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #d1d5db;
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.admin-detail-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.admin-detail-list div {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.admin-detail-list div:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.admin-detail-list dt {
+  color: var(--color-muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.admin-detail-list dd {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 700;
+  word-break: break-word;
+}
+
+.admin-edit-form {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-edit-form label {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-role-badge {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-role-badge--admin {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.admin-role-badge--owner {
+  color: #1e40af;
+  background: #dbeafe;
+}
+
+.admin-role-badge--tenant {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.admin-system-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.tenant-summary-card {
+  padding: 20px;
+}
+
+.admin-table {
+  min-width: 860px;
+}
+
+@media (max-width: 720px) {
+  .admin-filter-card,
+  .admin-detail-list div {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,28 @@
+.tenant-room-warning {
+  padding: 14px 16px;
+  border: 1px solid #fed7aa;
+  border-radius: var(--radius-md);
+  color: #92400e;
+  background: #fff7ed;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.tenant-table {
+  min-width: 980px;
+}
+
+.tenant-status-badge--active {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.tenant-status-badge--pending {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.tenant-status-badge--inactive {
+  color: #475569;
+  background: #e2e8f0;
+}

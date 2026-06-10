@@ -1,0 +1,152 @@
+.feedback-ai-panel {
+  padding: 14px 16px;
+  border: 1px solid #dbeafe;
+  border-radius: var(--radius-md);
+  color: #1e3a8a;
+  background: #eff6ff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.feedback-filter-card {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+
+.feedback-filter-card label {
+  display: grid;
+  gap: 8px;
+}
+
+.feedback-filter-card span {
+  color: #374151;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.feedback-filter-card select {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #d1d5db;
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.feedback-table {
+  min-width: 1180px;
+}
+
+.feedback-modal,
+.feedback-view-modal {
+  width: min(100%, 900px);
+}
+
+.feedback-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.feedback-summary dd {
+  white-space: pre-wrap;
+}
+
+.feedback-category-badge--electricity,
+.feedback-category-badge--maintenance {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.feedback-category-badge--water {
+  color: #1e40af;
+  background: #dbeafe;
+}
+
+.feedback-category-badge--internet {
+  color: #6b21a8;
+  background: #f3e8ff;
+}
+
+.feedback-category-badge--security {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.feedback-category-badge--cleanliness {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.feedback-category-badge--billing {
+  color: #155e75;
+  background: #cffafe;
+}
+
+.feedback-category-badge--other {
+  color: #475569;
+  background: #e2e8f0;
+}
+
+.feedback-priority-badge--low {
+  color: #475569;
+  background: #e2e8f0;
+}
+
+.feedback-priority-badge--medium {
+  color: #1e40af;
+  background: #dbeafe;
+}
+
+.feedback-priority-badge--high {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.feedback-priority-badge--urgent {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.feedback-sentiment-badge--positive {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.feedback-sentiment-badge--neutral {
+  color: #475569;
+  background: #e2e8f0;
+}
+
+.feedback-sentiment-badge--negative {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.feedback-status-badge--new {
+  color: #1e40af;
+  background: #dbeafe;
+}
+
+.feedback-status-badge--in_review {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.feedback-status-badge--resolved {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.feedback-status-badge--rejected {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+@media (max-width: 900px) {
+  .feedback-filter-card,
+  .feedback-form {
+    grid-template-columns: 1fr;
+  }
+}

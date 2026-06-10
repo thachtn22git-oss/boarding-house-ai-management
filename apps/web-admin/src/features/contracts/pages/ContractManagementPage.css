@@ -1,0 +1,79 @@
+.contract-stats-grid {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.contract-table {
+  min-width: 1180px;
+}
+
+.contract-status-badge--active {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.contract-status-badge--pending {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.contract-status-badge--expired {
+  color: #475569;
+  background: #e2e8f0;
+}
+
+.contract-status-badge--terminated {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.contract-view-modal {
+  width: min(100%, 820px);
+}
+
+.contract-summary {
+  padding: 24px;
+}
+
+.contract-summary dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0;
+}
+
+.contract-summary div {
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #f8fafc;
+}
+
+.contract-summary .contract-summary-full {
+  grid-column: 1 / -1;
+}
+
+.contract-summary dt {
+  margin-bottom: 6px;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.contract-summary dd {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.contract-view-actions {
+  padding: 0 24px 24px;
+}
+
+@media (max-width: 720px) {
+  .contract-summary dl {
+    grid-template-columns: 1fr;
+  }
+}

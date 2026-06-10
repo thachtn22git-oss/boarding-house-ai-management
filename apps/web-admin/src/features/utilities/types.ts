@@ -1,0 +1,33 @@
+export type UtilityType = 'electricity' | 'water'
+
+export type UtilityReadingStatus = 'draft' | 'confirmed' | 'billed'
+
+export interface UtilityReading {
+  id: string
+  ownerId: string
+  roomId: string
+  tenantId?: string
+  utilityType: UtilityType
+  billingMonth: string
+  previousReading: number
+  currentReading: number
+  usage: number
+  unitPrice: number
+  totalAmount: number
+  status: UtilityReadingStatus
+  note?: string
+  createdAt?: unknown
+  updatedAt?: unknown
+}
+
+export interface UtilityReadingFormValues {
+  roomId: string
+  tenantId?: string
+  utilityType: UtilityType
+  billingMonth: string
+  previousReading: number
+  currentReading: number
+  unitPrice: number
+  status: UtilityReadingStatus
+  note?: string
+}

@@ -1,0 +1,92 @@
+.utilities-actions {
+  gap: 10px;
+}
+
+.utilities-stats-grid {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.utilities-filter-card {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+
+.utilities-filter-card label {
+  display: grid;
+  gap: 8px;
+}
+
+.utilities-filter-card span {
+  color: #374151;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.utilities-filter-card select,
+.utilities-filter-card input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #d1d5db;
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.utilities-table {
+  min-width: 1240px;
+}
+
+.utility-modal {
+  width: min(100%, 880px);
+}
+
+.utility-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.utility-total-card {
+  align-self: stretch;
+}
+
+.utility-type-badge--electricity {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.utility-type-badge--water {
+  color: #1e40af;
+  background: #dbeafe;
+}
+
+.utility-status-badge--draft {
+  color: #475569;
+  background: #e2e8f0;
+}
+
+.utility-status-badge--confirmed {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.utility-status-badge--billed {
+  color: #1e40af;
+  background: #dbeafe;
+}
+
+@media (max-width: 900px) {
+  .utilities-filter-card,
+  .utility-form {
+    grid-template-columns: 1fr;
+  }
+
+  .utilities-actions {
+    flex-direction: column-reverse;
+  }
+
+  .utilities-actions button {
+    width: 100%;
+  }
+}

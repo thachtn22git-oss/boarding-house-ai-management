@@ -1,0 +1,224 @@
+@import '../../rooms/pages/RoomManagementPage.css';
+
+.tenant-portal-page {
+  display: grid;
+  gap: 20px;
+}
+
+.tenant-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.tenant-summary-card {
+  padding: 20px;
+}
+
+.tenant-summary-card h2 {
+  margin: 0 0 16px;
+  color: var(--color-text);
+  font-size: 18px;
+}
+
+.tenant-detail-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.tenant-detail-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tenant-detail-list div:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.tenant-detail-list dt {
+  color: var(--color-muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.tenant-detail-list dd {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.tenant-detail-list .tenant-detail-long {
+  display: grid;
+}
+
+.tenant-detail-list .tenant-detail-long dd {
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.tenant-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.tenant-actions .quick-action-button {
+  display: inline-grid;
+  place-items: center;
+  text-decoration: none;
+}
+
+.tenant-form-card {
+  padding: 20px;
+}
+
+.tenant-form-card h2 {
+  margin: 0 0 16px;
+  color: var(--color-text);
+  font-size: 18px;
+}
+
+.tenant-feedback-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.tenant-feedback-form .room-form-actions {
+  padding-top: 0;
+}
+
+.tenant-status-badge,
+.tenant-type-badge,
+.tenant-priority-badge,
+.tenant-category-badge,
+.tenant-sentiment-badge {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tenant-status-badge--active,
+.tenant-status-badge--paid,
+.tenant-status-badge--confirmed,
+.tenant-status-badge--billed,
+.tenant-status-badge--resolved {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.tenant-status-badge--available,
+.tenant-status-badge--draft,
+.tenant-status-badge--cancelled {
+  color: #475569;
+  background: #e2e8f0;
+}
+
+.tenant-status-badge--occupied,
+.tenant-status-badge--new {
+  color: #1e40af;
+  background: #dbeafe;
+}
+
+.tenant-status-badge--pending,
+.tenant-status-badge--unpaid,
+.tenant-status-badge--in_review {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.tenant-status-badge--maintenance,
+.tenant-status-badge--expired,
+.tenant-status-badge--terminated,
+.tenant-status-badge--overdue,
+.tenant-status-badge--rejected {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.tenant-type-badge--electricity,
+.tenant-priority-badge--high,
+.tenant-category-badge--electricity,
+.tenant-category-badge--maintenance {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.tenant-type-badge--water,
+.tenant-priority-badge--medium,
+.tenant-category-badge--water {
+  color: #1e40af;
+  background: #dbeafe;
+}
+
+.tenant-priority-badge--low,
+.tenant-category-badge--other {
+  color: #475569;
+  background: #e2e8f0;
+}
+
+.tenant-priority-badge--urgent,
+.tenant-category-badge--security {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.tenant-category-badge--internet {
+  color: #6b21a8;
+  background: #f3e8ff;
+}
+
+.tenant-category-badge--cleanliness {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.tenant-category-badge--billing {
+  color: #155e75;
+  background: #cffafe;
+}
+
+.tenant-sentiment-badge--positive {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.tenant-sentiment-badge--neutral {
+  color: #475569;
+  background: #e2e8f0;
+}
+
+.tenant-sentiment-badge--negative {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.tenant-view-modal {
+  width: min(100%, 900px);
+}
+
+@media (max-width: 720px) {
+  .tenant-feedback-form {
+    grid-template-columns: 1fr;
+  }
+
+  .tenant-detail-list div {
+    display: grid;
+    gap: 4px;
+  }
+
+  .tenant-detail-list dd {
+    text-align: left;
+  }
+}

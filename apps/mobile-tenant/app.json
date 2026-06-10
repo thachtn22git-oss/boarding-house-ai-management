@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Boarding House AI Tenant",
+    "slug": "boarding-house-ai-tenant",
+    "scheme": "boarding-house-ai-tenant",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

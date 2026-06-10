@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Boarding House AI Owner",
+    "slug": "boarding-house-ai-owner",
+    "scheme": "boarding-house-ai-owner",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
