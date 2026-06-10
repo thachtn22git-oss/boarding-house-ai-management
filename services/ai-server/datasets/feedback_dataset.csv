@@ -1,0 +1,121 @@
+content,sentiment,category,priority
+Internet is very slow in my room,negative,internet,medium
+Wifi phòng tôi rất yếu,negative,internet,medium
+The network disconnects every evening,negative,internet,high
+Mạng bị rớt liên tục vào buổi tối,negative,internet,high
+Internet speed is stable today,positive,internet,low
+Wifi hôm nay mạnh và ổn định,positive,internet,low
+The router needs to be restarted often,neutral,internet,medium
+Bộ phát wifi cần kiểm tra lại,neutral,internet,medium
+I cannot join online class because wifi is down,negative,internet,urgent
+Không có mạng nên tôi không thể làm việc,negative,internet,urgent
+Internet support fixed the problem quickly,positive,internet,low
+Kỹ thuật đã sửa wifi rất nhanh,positive,internet,low
+Wifi signal is weak near the window,negative,internet,medium
+Mạng trong phòng ngủ hơi chập chờn,negative,internet,medium
+Please check the internet package,neutral,internet,low
+The water supply stopped last night,negative,water,urgent
+Tối qua phòng tôi bị mất nước,negative,water,urgent
+Water pressure is very low,negative,water,high
+Nước chảy yếu trong nhà tắm,negative,water,high
+The water is clean this week,positive,water,low
+Nước tuần này sạch và không có mùi,positive,water,low
+Please record the water meter again,neutral,water,medium
+Xin kiểm tra lại đồng hồ nước,neutral,water,medium
+There is no hot water in the bathroom,negative,water,high
+Phòng tắm không có nước nóng,negative,water,high
+Water bill looks normal this month,positive,water,low
+Tiền nước tháng này hợp lý,positive,water,low
+The pipe leaks under the sink,negative,water,high
+Ống nước dưới bồn rửa bị rò rỉ,negative,water,high
+Water tank cleaning was completed,positive,water,low
+My electricity bill seems incorrect,negative,electricity,high
+Tiền điện tháng này có vẻ sai,negative,electricity,high
+Power went out twice today,negative,electricity,urgent
+Hôm nay phòng bị mất điện hai lần,negative,electricity,urgent
+Electric meter reading looks accurate,positive,electricity,low
+Chỉ số điện đã được ghi đúng,positive,electricity,low
+Please check the electricity meter,neutral,electricity,medium
+Vui lòng kiểm tra đồng hồ điện,neutral,electricity,medium
+The light in the hallway is flickering,negative,electricity,medium
+Đèn hành lang bị nhấp nháy,negative,electricity,medium
+Electricity is stable after repair,positive,electricity,low
+Điện đã ổn định sau khi sửa,positive,electricity,low
+The socket near my desk is unsafe,negative,electricity,urgent
+Ổ cắm gần bàn có dấu hiệu nguy hiểm,negative,electricity,urgent
+Please explain the electricity unit price,neutral,electricity,low
+There are strangers near the gate,negative,security,urgent
+Có người lạ ở trước cổng,negative,security,urgent
+The gate lock is broken,negative,security,high
+Khóa cổng bị hỏng,negative,security,high
+Security camera works well,positive,security,low
+Camera an ninh hoạt động tốt,positive,security,low
+Please remind tenants to close the gate,neutral,security,medium
+Vui lòng nhắc mọi người đóng cổng,neutral,security,medium
+Someone knocked on my door late at night,negative,security,high
+Có người gõ cửa phòng tôi lúc khuya,negative,security,high
+The guard handled the issue quickly,positive,security,low
+Bảo vệ xử lý sự việc nhanh chóng,positive,security,low
+The parking area feels unsafe,negative,security,high
+Khu vực gửi xe không an toàn,negative,security,high
+Please add a light near the gate,neutral,security,medium
+The room is clean and quiet,positive,cleanliness,low
+Phòng sạch và yên tĩnh,positive,cleanliness,low
+The shared kitchen is dirty,negative,cleanliness,medium
+Bếp chung khá bẩn,negative,cleanliness,medium
+Trash has not been collected,negative,cleanliness,high
+Rác chưa được thu gom,negative,cleanliness,high
+The hallway smells bad,negative,cleanliness,medium
+Hành lang có mùi khó chịu,negative,cleanliness,medium
+Cleaning service is good this week,positive,cleanliness,low
+Dịch vụ vệ sinh tuần này tốt,positive,cleanliness,low
+Please clean the stair area,neutral,cleanliness,medium
+Vui lòng dọn khu vực cầu thang,neutral,cleanliness,medium
+Bathroom floor is slippery and dirty,negative,cleanliness,high
+Sàn nhà tắm trơn và bẩn,negative,cleanliness,high
+The laundry area is tidy now,positive,cleanliness,low
+The air conditioner is broken,negative,maintenance,high
+Máy lạnh phòng tôi bị hỏng,negative,maintenance,high
+The door hinge makes loud noise,negative,maintenance,medium
+Bản lề cửa kêu rất to,negative,maintenance,medium
+Maintenance fixed the fan quickly,positive,maintenance,low
+Thợ đã sửa quạt rất nhanh,positive,maintenance,low
+Please check the cracked wall,neutral,maintenance,medium
+Vui lòng kiểm tra tường bị nứt,neutral,maintenance,medium
+The ceiling is leaking during rain,negative,maintenance,urgent
+Trần nhà bị dột khi trời mưa,negative,maintenance,urgent
+Window repair was completed,positive,maintenance,low
+Cửa sổ đã được sửa xong,positive,maintenance,low
+The bathroom door cannot close,negative,maintenance,high
+Cửa nhà tắm không đóng được,negative,maintenance,high
+Please schedule maintenance for my room,neutral,maintenance,medium
+Invoice amount is higher than expected,negative,billing,high
+Hóa đơn cao hơn dự kiến,negative,billing,high
+I already paid but invoice shows unpaid,negative,billing,urgent
+Tôi đã trả tiền nhưng hóa đơn vẫn chưa thanh toán,negative,billing,urgent
+Payment receipt was updated correctly,positive,billing,low
+Biên lai thanh toán đã cập nhật đúng,positive,billing,low
+Please send the invoice breakdown,neutral,billing,medium
+Vui lòng gửi chi tiết hóa đơn,neutral,billing,medium
+Late fee seems incorrect,negative,billing,high
+Phí trễ hạn có vẻ không đúng,negative,billing,high
+Monthly rent charge is clear,positive,billing,low
+Tiền thuê tháng này rõ ràng,positive,billing,low
+Please confirm my deposit balance,neutral,billing,medium
+Vui lòng xác nhận số dư tiền cọc,neutral,billing,medium
+The service fee was charged twice,negative,billing,urgent
+Neighbors are too noisy at midnight,negative,other,medium
+Hàng xóm quá ồn lúc nửa đêm,negative,other,medium
+I want to update my phone number,neutral,other,low
+Tôi muốn cập nhật số điện thoại,neutral,other,low
+The owner responded politely,positive,other,low
+Chủ nhà phản hồi lịch sự,positive,other,low
+There is a bad smell from outside,negative,other,medium
+Có mùi khó chịu từ bên ngoài,negative,other,medium
+Please add bicycle parking instructions,neutral,other,low
+Vui lòng thêm hướng dẫn gửi xe đạp,neutral,other,low
+The boarding house is comfortable,positive,other,low
+Nhà trọ ở rất thoải mái,positive,other,low
+Someone is smoking near my room,negative,other,high
+Có người hút thuốc gần phòng tôi,negative,other,high
+I need help with move out procedure,neutral,other,medium

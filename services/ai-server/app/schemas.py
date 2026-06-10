@@ -1,0 +1,25 @@
+from pydantic import BaseModel, Field
+
+
+class FeedbackAnalyzeRequest(BaseModel):
+    content: str = Field(..., min_length=1)
+
+
+class FeedbackConfidence(BaseModel):
+    sentiment: float
+    category: float
+    priority: float
+
+
+class FeedbackAnalyzeResponse(BaseModel):
+    content: str
+    sentiment: str
+    category: str
+    priority: str
+    summary: str
+    confidence: FeedbackConfidence
+
+
+class HealthResponse(BaseModel):
+    status: str
+    service: str
