@@ -4,8 +4,6 @@ import { formatDate } from '../../../utils/format'
 import type {
   Feedback,
   FeedbackCategory,
-  FeedbackPriority,
-  SentimentLabel,
 } from '../../feedbacks/types'
 import TenantPortalStateView from './TenantPortalStateView'
 import { formatLabel } from './tenantPortalFormatting'
@@ -23,23 +21,20 @@ const categoryOptions: FeedbackCategory[] = [
   'other',
 ]
 
-const priorityOptions: FeedbackPriority[] = ['low', 'medium', 'high', 'urgent']
-const sentimentOptions: SentimentLabel[] = ['positive', 'neutral', 'negative']
-
 type FeedbackFormState = {
   title: string
   content: string
-  category: FeedbackCategory
-  priority: FeedbackPriority
-  sentiment: SentimentLabel
+  category: FeedbackCategory | ''
 }
 
 const initialFeedbackForm: FeedbackFormState = {
   title: '',
   content: '',
-  category: 'maintenance',
-  priority: 'medium',
-  sentiment: 'neutral',
+  category: '',
+}
+
+function formatAiValue(value: string | null | undefined) {
+  return value ? formatLabel(value) : 'Pending AI'
 }
 
 function TenantFeedbackViewModal({
@@ -83,16 +78,16 @@ function TenantFeedbackViewModal({
               <dd>{formatLabel(feedback.category)}</dd>
             </div>
             <div>
-              <dt>Priority</dt>
-              <dd>{formatLabel(feedback.priority)}</dd>
+              <dt>AI Priority</dt>
+              <dd>{formatAiValue(feedback.priority)}</dd>
             </div>
             <div>
               <dt>Status</dt>
               <dd>{formatLabel(feedback.status)}</dd>
             </div>
             <div>
-              <dt>Sentiment</dt>
-              <dd>{feedback.sentiment ? formatLabel(feedback.sentiment) : '-'}</dd>
+              <dt>AI Sentiment</dt>
+              <dd>{formatAiValue(feedback.sentiment)}</dd>
             </div>
             <div>
               <dt>Created Date</dt>
@@ -100,14 +95,14 @@ function TenantFeedbackViewModal({
             </div>
             <div className="tenant-detail-long">
               <dt>AI Summary</dt>
-              <dd>{feedback.aiSummary || 'No AI summary yet.'}</dd>
+              <dd>{feedback.aiSummary || 'AI summary will be generated after analysis.'}</dd>
             </div>
             <div>
               <dt>AI Suggested Category</dt>
               <dd>
                 {feedback.aiSuggestedCategory
                   ? formatLabel(feedback.aiSuggestedCategory)
-                  : '-'}
+                  : 'Pending AI'}
               </dd>
             </div>
             <div>
@@ -115,7 +110,7 @@ function TenantFeedbackViewModal({
               <dd>
                 {feedback.aiSuggestedPriority
                   ? formatLabel(feedback.aiSuggestedPriority)
-                  : '-'}
+                  : 'Pending AI'}
               </dd>
             </div>
             <div className="tenant-detail-long">
@@ -156,11 +151,6 @@ function MyFeedbackPage() {
       return
     }
 
-    if (!form.sentiment) {
-      setFormError('Sentiment is required.')
-      return
-    }
-
     setIsSubmitting(true)
     setFormError('')
 
@@ -168,9 +158,7 @@ function MyFeedbackPage() {
       await submitFeedback({
         title: form.title.trim(),
         content: form.content.trim(),
-        category: form.category,
-        priority: form.priority,
-        sentiment: form.sentiment,
+        category: form.category || 'other',
       })
       setForm(initialFeedbackForm)
     } catch {
@@ -210,7 +198,10 @@ function MyFeedbackPage() {
   return (
     <div className="tenant-portal-page">
       <section className="dashboard-card tenant-form-card">
-        <h2>Create Feedback</h2>
+        <h2>Submit Feedback</h2>
+        <p className="tenant-form-helper">
+          Describe your issue and AI will help classify it.
+        </p>
         {formError ? <div className="room-error">{formError}</div> : null}
         <form className="tenant-feedback-form" onSubmit={handleSubmit}>
           <label className="room-form-field">
@@ -236,6 +227,7 @@ function MyFeedbackPage() {
                 }))
               }
             >
+              <option value="">Category optional</option>
               {categoryOptions.map((category) => (
                 <option key={category} value={category}>
                   {formatLabel(category)}
@@ -243,46 +235,8 @@ function MyFeedbackPage() {
               ))}
             </select>
           </label>
-          <label className="room-form-field">
-            <span>Priority</span>
-            <select
-              value={form.priority}
-              disabled={isSubmitting}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  priority: event.target.value as FeedbackPriority,
-                }))
-              }
-            >
-              {priorityOptions.map((priority) => (
-                <option key={priority} value={priority}>
-                  {formatLabel(priority)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="room-form-field">
-            <span>Sentiment</span>
-            <select
-              value={form.sentiment}
-              disabled={isSubmitting}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  sentiment: event.target.value as SentimentLabel,
-                }))
-              }
-            >
-              {sentimentOptions.map((sentiment) => (
-                <option key={sentiment} value={sentiment}>
-                  {formatLabel(sentiment)}
-                </option>
-              ))}
-            </select>
-          </label>
           <label className="room-form-field room-form-field--full">
-            <span>Content</span>
+            <span>Description</span>
             <textarea
               value={form.content}
               rows={5}
@@ -290,12 +244,12 @@ function MyFeedbackPage() {
               onChange={(event) =>
                 setForm((current) => ({ ...current, content: event.target.value }))
               }
-              placeholder="Describe your feedback"
+              placeholder="Describe your issue"
             />
           </label>
           <div className="room-form-actions">
             <button className="primary-button" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Submitting...' : 'Create Feedback'}
+              {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
             </button>
           </div>
         </form>
@@ -314,8 +268,8 @@ function MyFeedbackPage() {
                 <tr>
                   <th>Title</th>
                   <th>Category</th>
-                  <th>Priority</th>
-                  <th>Sentiment</th>
+                  <th>AI Priority</th>
+                  <th>AI Sentiment</th>
                   <th>Status</th>
                   <th>Created Date</th>
                   <th>Actions</th>
@@ -331,13 +285,22 @@ function MyFeedbackPage() {
                       >
                         {formatLabel(feedback.category)}
                       </span>
+                      {feedback.category === 'other' && feedback.aiSuggestedCategory ? (
+                        <span className="tenant-ai-suggestion">
+                          Suggested: {formatLabel(feedback.aiSuggestedCategory)}
+                        </span>
+                      ) : null}
                     </td>
                     <td>
-                      <span
-                        className={`tenant-priority-badge tenant-priority-badge--${feedback.priority}`}
-                      >
-                        {formatLabel(feedback.priority)}
-                      </span>
+                      {feedback.priority ? (
+                        <span
+                          className={`tenant-priority-badge tenant-priority-badge--${feedback.priority}`}
+                        >
+                          {formatLabel(feedback.priority)}
+                        </span>
+                      ) : (
+                        <span className="tenant-ai-pending-badge">Pending AI</span>
+                      )}
                     </td>
                     <td>
                       {feedback.sentiment ? (
@@ -347,7 +310,7 @@ function MyFeedbackPage() {
                           {formatLabel(feedback.sentiment)}
                         </span>
                       ) : (
-                        '-'
+                        <span className="tenant-ai-pending-badge">Pending AI</span>
                       )}
                     </td>
                     <td>

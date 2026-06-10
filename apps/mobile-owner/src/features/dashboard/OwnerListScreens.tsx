@@ -484,8 +484,8 @@ export function FeedbackScreen() {
         <View style={styles.item}>
           <Text style={styles.itemTitle}>{feedback.title}</Text>
           <Text style={styles.meta}>Category: {formatLabel(feedback.category)}</Text>
-          <Text style={styles.meta}>Priority: {formatLabel(feedback.priority)}</Text>
-          <Text style={styles.meta}>Sentiment: {formatLabel(feedback.sentiment)}</Text>
+          <Text style={styles.meta}>AI Priority: {formatAiLabel(feedback.priority)}</Text>
+          <Text style={styles.meta}>AI Sentiment: {formatAiLabel(feedback.sentiment)}</Text>
           <StatusBadge label={formatLabel(feedback.status)} tone={statusTone(feedback.status)} />
           <View style={styles.actions}>
             <PrimaryButton
@@ -494,7 +494,11 @@ export function FeedbackScreen() {
                 Alert.alert(feedback.title, [
                   feedback.content || 'No content available.',
                   feedback.ownerResponse ? `\nOwner Response: ${feedback.ownerResponse}` : '',
-                  feedback.aiSummary ? `\nAI Summary: ${feedback.aiSummary}` : '',
+                  '\nAI Analysis',
+                  `Sentiment: ${formatAiLabel(feedback.sentiment)}`,
+                  `Category: ${formatLabel(feedback.category)}`,
+                  `Priority: ${formatAiLabel(feedback.priority)}`,
+                  `Summary: ${feedback.aiSummary ?? 'AI summary will be generated after analysis.'}`,
                 ].join(''))
               }
               variant="secondary"
@@ -909,6 +913,10 @@ function formatLabel(value?: string) {
     .split('_')
     .map((part) => capitalize(part))
     .join(' ')
+}
+
+function formatAiLabel(value?: string | null) {
+  return value ? formatLabel(value) : 'Pending AI'
 }
 
 function capitalize(value: string) {

@@ -21,6 +21,13 @@ function FeedbackViewModal({
   room,
   onClose,
 }: FeedbackViewModalProps) {
+  const sentimentLabel = feedback.sentiment
+    ? getSentimentLabel(feedback.sentiment)
+    : 'Pending AI Analysis'
+  const priorityLabel = feedback.priority
+    ? getPriorityLabel(feedback.priority)
+    : 'Pending AI Analysis'
+
   return (
     <div className="room-modal-backdrop" role="presentation">
       <section
@@ -67,40 +74,40 @@ function FeedbackViewModal({
               <dd>{getCategoryLabel(feedback.category)}</dd>
             </div>
             <div>
-              <dt>Priority</dt>
-              <dd>{getPriorityLabel(feedback.priority)}</dd>
-            </div>
-            <div>
-              <dt>Sentiment</dt>
-              <dd>
-                {feedback.sentiment
-                  ? getSentimentLabel(feedback.sentiment)
-                  : 'No sentiment'}
-              </dd>
-            </div>
-            <div>
               <dt>Status</dt>
               <dd>{getStatusLabel(feedback.status)}</dd>
             </div>
+            <div className="contract-summary-full feedback-ai-section-title">
+              <dt>AI Analysis</dt>
+              <dd>AI-generated classification details for this feedback.</dd>
+            </div>
             <div>
-              <dt>AI suggested category</dt>
+              <dt>Sentiment</dt>
+              <dd>{sentimentLabel}</dd>
+            </div>
+            <div>
+              <dt>Category</dt>
               <dd>
-                {feedback.aiSuggestedCategory
-                  ? getCategoryLabel(feedback.aiSuggestedCategory)
-                  : 'Not analyzed'}
+                {getCategoryLabel(feedback.category)}
+                {feedback.aiSuggestedCategory ? (
+                  <>
+                    <br />
+                    Suggested: {getCategoryLabel(feedback.aiSuggestedCategory)}
+                  </>
+                ) : null}
               </dd>
             </div>
             <div>
-              <dt>AI suggested priority</dt>
-              <dd>
-                {feedback.aiSuggestedPriority
-                  ? getPriorityLabel(feedback.aiSuggestedPriority)
-                  : 'Not analyzed'}
-              </dd>
+              <dt>Priority</dt>
+              <dd>{priorityLabel}</dd>
+            </div>
+            <div>
+              <dt>AI Generated</dt>
+              <dd>{feedback.aiGenerated ? 'Yes' : 'No'}</dd>
             </div>
             <div className="contract-summary-full">
-              <dt>AI summary</dt>
-              <dd>{feedback.aiSummary || 'Not analyzed'}</dd>
+              <dt>Summary</dt>
+              <dd>{feedback.aiSummary || 'AI summary will be generated after analysis.'}</dd>
             </div>
             <div className="contract-summary-full">
               <dt>Owner response</dt>

@@ -13,7 +13,7 @@ import {
   type TenantPortalData,
 } from '../../services/tenantPortal.service'
 import { formatCurrency, formatDate } from '../../utils/format'
-import type { Feedback, FeedbackCategory, FeedbackPriority, Invoice, UtilityReading } from '../../types/models'
+import type { Feedback, FeedbackCategory, Invoice, UtilityReading } from '../../types/models'
 
 function useTenantPortalData() {
   const { currentUser } = useAuth()
@@ -166,9 +166,7 @@ export function MyFeedbackScreen() {
   const { data, loading, error, reload } = useTenantPortalData()
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
-  const [category, setCategory] = useState<FeedbackCategory>('maintenance')
-  const [priority, setPriority] = useState<FeedbackPriority>('medium')
-  const [sentiment, setSentiment] = useState<'positive' | 'neutral' | 'negative'>('neutral')
+  const [category, setCategory] = useState<FeedbackCategory | ''>('')
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -190,31 +188,18 @@ export function MyFeedbackScreen() {
       return
     }
 
-    if (!category) {
-      setFormError('Category is required.')
-      return
+    const values: TenantFeedbackValues = {
+      title: title.trim(),
+      content: content.trim(),
+      category: category || 'other',
     }
-
-    if (!priority) {
-      setFormError('Priority is required.')
-      return
-    }
-
-    if (!sentiment) {
-      setFormError('Sentiment is required.')
-      return
-    }
-
-    const values: TenantFeedbackValues = { title, content, category, priority, sentiment }
 
     setSubmitting(true)
     try {
       await createTenantFeedback(data.tenant, values)
       setTitle('')
       setContent('')
-      setCategory('maintenance')
-      setPriority('medium')
-      setSentiment('neutral')
+      setCategory('')
       await reload()
     } catch (submitError) {
       console.warn('Tenant feedback creation failed.', submitError)
@@ -225,13 +210,13 @@ export function MyFeedbackScreen() {
   }
 
   return (
-    <Screen loading={loading} onRefresh={reload} refreshing={loading} subtitle="Submit feedback and review owner responses." title="My Feedback">
+    <Screen loading={loading} onRefresh={reload} refreshing={loading} subtitle="Describe your issue and AI will help classify it." title="Submit Feedback">
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <ListCard title="Create Feedback">
+      <ListCard title="Submit Feedback">
         <TextInput placeholder="Title" placeholderTextColor={colors.muted} style={styles.input} value={title} onChangeText={setTitle} />
         <TextInput
           multiline
-          placeholder="Content"
+          placeholder="Description"
           placeholderTextColor={colors.muted}
           style={[styles.input, styles.textarea]}
           value={content}
@@ -239,32 +224,20 @@ export function MyFeedbackScreen() {
         />
         <OptionRow
           label="Category"
-          options={['maintenance', 'electricity', 'water', 'internet', 'security', 'cleanliness', 'billing', 'other']}
-          value={category}
-          onChange={(value) => setCategory(value as FeedbackCategory)}
-        />
-        <OptionRow
-          label="Priority"
-          options={['low', 'medium', 'high', 'urgent']}
-          value={priority}
-          onChange={(value) => setPriority(value as FeedbackPriority)}
-        />
-        <OptionRow
-          label="Sentiment"
-          options={['positive', 'neutral', 'negative']}
-          value={sentiment}
-          onChange={(value) => setSentiment(value as 'positive' | 'neutral' | 'negative')}
+          options={['other', 'electricity', 'water', 'internet', 'security', 'cleanliness', 'maintenance', 'billing']}
+          value={category || 'other'}
+          onChange={(value) => setCategory(value === 'other' ? '' : (value as FeedbackCategory))}
         />
         {formError ? <Text style={styles.error}>{formError}</Text> : null}
-        <PrimaryButton disabled={submitting} label={submitting ? 'Submitting...' : 'Create Feedback'} onPress={submitFeedback} />
+        <PrimaryButton disabled={submitting} label={submitting ? 'Submitting...' : 'Submit Feedback'} onPress={submitFeedback} />
       </ListCard>
 
       {!data?.feedbacks.length ? <Text style={styles.empty}>No feedback found.</Text> : null}
       {data?.feedbacks.map((feedback) => (
         <ListCard key={feedback.id} title={feedback.title} subtitle={formatDate(feedback.createdAt)}>
           <Text style={styles.meta}>Category: {feedback.category}</Text>
-          <Text style={styles.meta}>Priority: {feedback.priority}</Text>
-          <Text style={styles.meta}>Sentiment: {feedback.sentiment ?? 'neutral'}</Text>
+          <Text style={styles.meta}>AI Priority: {feedback.priority ?? 'Pending AI'}</Text>
+          <Text style={styles.meta}>AI Sentiment: {feedback.sentiment ?? 'Pending AI'}</Text>
           <Text style={styles.meta}>Status: {feedback.status}</Text>
           <Text style={styles.meta}>Owner Response: {feedback.ownerResponse ?? 'Not available'}</Text>
           <PrimaryButton label="View Details" onPress={() => showFeedbackDetails(feedback)} variant="secondary" />
@@ -342,11 +315,12 @@ function showFeedbackDetails(feedback: Feedback) {
     [
       feedback.content,
       `Category: ${feedback.category}`,
-      `Priority: ${feedback.priority}`,
-      `Sentiment: ${feedback.sentiment ?? 'neutral'}`,
+      'AI Analysis',
+      `Priority: ${feedback.priority ?? 'Pending AI'}`,
+      `Sentiment: ${feedback.sentiment ?? 'Pending AI'}`,
       `Status: ${feedback.status}`,
       `Owner Response: ${feedback.ownerResponse ?? 'Not available'}`,
-      `AI Summary: ${feedback.aiSummary ?? 'Not available'}`,
+      `AI Summary: ${feedback.aiSummary ?? 'AI summary will be generated after analysis.'}`,
     ].join('\n\n'),
   )
 }

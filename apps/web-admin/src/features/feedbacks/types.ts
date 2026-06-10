@@ -22,12 +22,13 @@ export interface Feedback {
   title: string
   content: string
   category: FeedbackCategory
-  priority: FeedbackPriority
+  priority?: FeedbackPriority | null
   status: FeedbackStatus
-  sentiment?: SentimentLabel
-  aiSuggestedCategory?: FeedbackCategory
-  aiSuggestedPriority?: FeedbackPriority
-  aiSummary?: string
+  sentiment?: SentimentLabel | null
+  aiGenerated?: boolean
+  aiSuggestedCategory?: FeedbackCategory | null
+  aiSuggestedPriority?: FeedbackPriority | null
+  aiSummary?: string | null
   ownerResponse?: string
   createdAt?: unknown
   updatedAt?: unknown
@@ -40,8 +41,8 @@ export interface FeedbackFormValues {
   title: string
   content: string
   category: FeedbackCategory
-  priority: FeedbackPriority
+  priority?: FeedbackPriority | null
   status: FeedbackStatus
-  sentiment?: SentimentLabel
+  sentiment?: SentimentLabel | null
   ownerResponse?: string
 }

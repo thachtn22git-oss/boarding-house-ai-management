@@ -5,6 +5,7 @@ export type UtilityType = 'electricity' | 'water'
 export type UtilityReadingStatus = 'draft' | 'confirmed' | 'billed'
 export type FeedbackStatus = 'new' | 'in_review' | 'resolved' | 'rejected'
 export type FeedbackPriority = 'low' | 'medium' | 'high' | 'urgent'
+export type SentimentLabel = 'positive' | 'neutral' | 'negative'
 export type FeedbackCategory =
   | 'electricity'
   | 'water'
@@ -103,10 +104,13 @@ export interface Feedback {
   title: string
   content: string
   category: FeedbackCategory
-  priority: FeedbackPriority
+  priority?: FeedbackPriority | null
   status: FeedbackStatus
-  sentiment?: 'positive' | 'neutral' | 'negative'
+  sentiment?: SentimentLabel | null
   ownerResponse?: string
-  aiSummary?: string
+  aiGenerated?: boolean
+  aiSummary?: string | null
+  aiSuggestedCategory?: FeedbackCategory | null
+  aiSuggestedPriority?: FeedbackPriority | null
   createdAt?: unknown
 }

@@ -107,12 +107,15 @@ export interface Feedback {
   roomId?: string
   title: string
   category?: FeedbackCategory
-  priority: FeedbackPriority
-  sentiment?: SentimentLabel
+  priority?: FeedbackPriority | null
+  sentiment?: SentimentLabel | null
   status: FeedbackStatus
   content?: string
   ownerResponse?: string
-  aiSummary?: string
+  aiGenerated?: boolean
+  aiSummary?: string | null
+  aiSuggestedCategory?: FeedbackCategory | null
+  aiSuggestedPriority?: FeedbackPriority | null
   createdAt?: unknown
 }
 

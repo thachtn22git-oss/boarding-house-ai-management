@@ -77,9 +77,9 @@ function getInitialValues(feedback: Feedback | null): FeedbackFormValues {
     title: feedback.title,
     content: feedback.content,
     category: feedback.category,
-    priority: feedback.priority,
+    priority: feedback.priority ?? 'medium',
     status: feedback.status,
-    sentiment: feedback.sentiment,
+    sentiment: feedback.sentiment ?? undefined,
     ownerResponse: feedback.ownerResponse ?? '',
   }
 }
@@ -273,7 +273,7 @@ function FeedbackFormModal({
           <label className="room-form-field">
             <span>Priority</span>
             <select
-              value={values.priority}
+              value={values.priority ?? 'medium'}
               disabled={submitting}
               aria-invalid={Boolean(errors.priority)}
               onChange={(event) =>

@@ -73,16 +73,17 @@ function mapFeedbackDocument(
     title: String(data.title ?? ''),
     content: String(data.content ?? ''),
     category: isFeedbackCategory(data.category) ? data.category : 'other',
-    priority: isFeedbackPriority(data.priority) ? data.priority : 'medium',
+    priority: isFeedbackPriority(data.priority) ? data.priority : null,
     status: isFeedbackStatus(data.status) ? data.status : 'new',
-    sentiment: isSentimentLabel(data.sentiment) ? data.sentiment : undefined,
+    sentiment: isSentimentLabel(data.sentiment) ? data.sentiment : null,
+    aiGenerated: Boolean(data.aiGenerated),
     aiSuggestedCategory: isFeedbackCategory(data.aiSuggestedCategory)
       ? data.aiSuggestedCategory
-      : undefined,
+      : null,
     aiSuggestedPriority: isFeedbackPriority(data.aiSuggestedPriority)
       ? data.aiSuggestedPriority
-      : undefined,
-    aiSummary: typeof data.aiSummary === 'string' ? data.aiSummary : undefined,
+      : null,
+    aiSummary: typeof data.aiSummary === 'string' ? data.aiSummary : null,
     ownerResponse:
       typeof data.ownerResponse === 'string' ? data.ownerResponse : undefined,
     createdAt: data.createdAt,

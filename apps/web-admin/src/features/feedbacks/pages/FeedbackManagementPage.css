@@ -144,6 +144,33 @@
   background: #fee2e2;
 }
 
+.feedback-ai-pending-badge,
+.tenant-ai-pending-badge {
+  display: inline-flex;
+  width: max-content;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 9px;
+  color: #475569;
+  background: #e2e8f0;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.feedback-ai-suggestion,
+.tenant-ai-suggestion {
+  display: block;
+  margin-top: 6px;
+  color: #1e40af;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.feedback-ai-section-title dd {
+  color: #64748b;
+  font-weight: 600;
+}
+
 @media (max-width: 900px) {
   .feedback-filter-card,
   .feedback-form {

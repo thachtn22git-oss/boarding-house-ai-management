@@ -397,8 +397,8 @@ function FeedbackManagementPage() {
                   <th>Tenant</th>
                   <th>Room</th>
                   <th>Category</th>
-                  <th>Priority</th>
-                  <th>Sentiment</th>
+                  <th>AI Priority</th>
+                  <th>AI Sentiment</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -423,13 +423,25 @@ function FeedbackManagementPage() {
                         >
                           {getCategoryLabel(feedback.category)}
                         </span>
+                        {feedback.category === 'other' &&
+                        feedback.aiSuggestedCategory ? (
+                          <span className="feedback-ai-suggestion">
+                            Suggested: {getCategoryLabel(feedback.aiSuggestedCategory)}
+                          </span>
+                        ) : null}
                       </td>
                       <td>
-                        <span
-                          className={`status-badge feedback-priority-badge--${feedback.priority}`}
-                        >
-                          {getPriorityLabel(feedback.priority)}
-                        </span>
+                        {feedback.priority ? (
+                          <span
+                            className={`status-badge feedback-priority-badge--${feedback.priority}`}
+                          >
+                            {getPriorityLabel(feedback.priority)}
+                          </span>
+                        ) : (
+                          <span className="status-badge feedback-ai-pending-badge">
+                            Pending AI
+                          </span>
+                        )}
                       </td>
                       <td>
                         {feedback.sentiment ? (
@@ -439,7 +451,9 @@ function FeedbackManagementPage() {
                             {getSentimentLabel(feedback.sentiment)}
                           </span>
                         ) : (
-                          '-'
+                          <span className="status-badge feedback-ai-pending-badge">
+                            Pending AI
+                          </span>
                         )}
                       </td>
                       <td>

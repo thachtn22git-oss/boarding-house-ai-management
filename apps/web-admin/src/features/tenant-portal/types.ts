@@ -1,9 +1,7 @@
 import type { Contract } from '../contracts/types'
 import type {
   FeedbackCategory,
-  FeedbackPriority,
   Feedback,
-  SentimentLabel,
 } from '../feedbacks/types'
 import type { Invoice } from '../invoices/types'
 import type { Room } from '../rooms/types'
@@ -22,7 +20,5 @@ export type TenantPortalData = {
 export type TenantFeedbackFormValues = {
   title: string
   content: string
-  category: FeedbackCategory
-  priority: FeedbackPriority
-  sentiment: SentimentLabel
+  category?: FeedbackCategory
 }

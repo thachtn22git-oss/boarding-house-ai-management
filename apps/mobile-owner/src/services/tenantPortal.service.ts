@@ -4,10 +4,8 @@ import type {
   Contract,
   Feedback,
   FeedbackCategory,
-  FeedbackPriority,
   Invoice,
   Room,
-  SentimentLabel,
   Tenant,
   UtilityReading,
 } from '../types/models'
@@ -28,9 +26,7 @@ export interface TenantPortalData {
 export interface TenantFeedbackValues {
   title: string
   content: string
-  category: FeedbackCategory
-  priority: FeedbackPriority
-  sentiment: SentimentLabel
+  category?: FeedbackCategory
 }
 
 function mapDoc<T>(item: { id: string; data: () => Record<string, unknown> }) {
@@ -89,10 +85,14 @@ export async function createTenantFeedback(tenant: Tenant, values: TenantFeedbac
     roomId: tenant.roomId,
     title: values.title,
     content: values.content,
-    category: values.category,
-    priority: values.priority,
-    sentiment: values.sentiment,
+    category: values.category || 'other',
+    priority: null,
+    sentiment: null,
     status: 'new',
+    aiGenerated: false,
+    aiSummary: null,
+    aiSuggestedCategory: null,
+    aiSuggestedPriority: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
@@ -102,7 +102,7 @@ export async function createTenantFeedback(tenant: Tenant, values: TenantFeedbac
       userId: tenant.ownerId,
       role: 'owner',
       type: 'feedback',
-      priority: values.priority || 'medium',
+      priority: 'medium',
       title: 'New Tenant Feedback',
       message: `${tenant.fullName} submitted new feedback: ${values.title}`,
       read: false,
