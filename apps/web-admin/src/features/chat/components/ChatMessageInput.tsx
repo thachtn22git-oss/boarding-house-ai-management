@@ -2,9 +2,9 @@ import { useState } from 'react'
 import type { FormEvent, KeyboardEvent } from 'react'
 
 type ChatMessageInputProps = {
+  onSend: (text: string) => Promise<void> | void
   disabled?: boolean
-  sending: boolean
-  onSend: (text: string) => Promise<void>
+  sending?: boolean
 }
 
 function ChatMessageInput({
@@ -35,7 +35,7 @@ function ChatMessageInput({
         return
       }
 
-      void onSend(message.trim()).then(() => setMessage(''))
+      void Promise.resolve(onSend(message.trim())).then(() => setMessage(''))
     }
   }
 
@@ -43,7 +43,7 @@ function ChatMessageInput({
     <form className="chat-message-input" onSubmit={handleSubmit}>
       <textarea
         value={message}
-        placeholder="Type a message"
+        placeholder="Type a message..."
         rows={1}
         disabled={disabled || sending}
         onChange={(event) => setMessage(event.target.value)}

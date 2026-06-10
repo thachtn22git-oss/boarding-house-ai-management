@@ -21,13 +21,19 @@ function ChatMessageList({
   }, [messages])
 
   if (loading) {
-    return <div className="chat-message-state">Loading messages...</div>
+    return (
+      <div className="chat-message-list">
+        <div className="chat-message-state">Loading messages...</div>
+      </div>
+    )
   }
 
   if (messages.length === 0) {
     return (
-      <div className="chat-message-state">
-        No messages yet. Send the first message to start chatting.
+      <div className="chat-message-list">
+        <div className="chat-message-state">
+          No messages yet. Send the first message to start chatting.
+        </div>
       </div>
     )
   }
