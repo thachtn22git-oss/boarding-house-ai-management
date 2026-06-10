@@ -370,10 +370,10 @@ export async function sendMessage(
           message: `${sender.fullName}: ${preview}`,
           actionUrl:
             room.participantRoles[participantId] === 'owner'
-              ? '/owner/chat'
+              ? `/owner/chat?roomId=${chatRoomId}`
               : room.participantRoles[participantId] === 'admin'
-                ? '/admin/chat'
-                : '/tenant/chat',
+                ? `/admin/chat?roomId=${chatRoomId}`
+                : `/tenant/chat?roomId=${chatRoomId}`,
           read: false,
         }),
       ),

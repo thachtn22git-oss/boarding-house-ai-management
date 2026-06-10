@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import {
@@ -7,6 +8,7 @@ import {
   getPortalLabelForRole,
 } from '../../config/navigation'
 import { useAuth } from '../../features/auth/useAuth'
+import { subscribeToUserChatRooms } from '../../features/chat/services/chat.service'
 import NotificationBell from '../notifications/NotificationBell'
 import './AdminLayout.css'
 
@@ -35,6 +37,29 @@ function AdminLayout() {
   const { currentUser, logout } = useAuth()
   const portalLabel = getPortalLabelForRole(currentUser?.role)
   const navigationItems = getNavigationForRole(currentUser?.role)
+  const [chatUnreadCount, setChatUnreadCount] = useState(0)
+
+  useEffect(() => {
+    if (!currentUser || currentUser.role === 'admin') {
+      setChatUnreadCount(0)
+      return undefined
+    }
+
+    return subscribeToUserChatRooms(
+      currentUser.uid,
+      (rooms) => {
+        setChatUnreadCount(
+          rooms.reduce(
+            (total, room) => total + (room.unreadCounts[currentUser.uid] ?? 0),
+            0,
+          ),
+        )
+      },
+      (error) => {
+        console.warn('Unable to subscribe to chat unread counts.', error)
+      },
+    )
+  }, [currentUser])
 
   async function handleLogout() {
     await logout()
@@ -64,7 +89,14 @@ function AdminLayout() {
                 title={item.label}
               >
                 <span className="admin-nav-short">{item.shortLabel}</span>
-                <span className="admin-nav-text">{item.label}</span>
+                <span className="admin-nav-text">
+                  {item.label}
+                  {item.key === 'chat' && chatUnreadCount > 0 ? (
+                    <span className="admin-nav-badge">
+                      {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                    </span>
+                  ) : null}
+                </span>
               </NavLink>
             ))}
           </nav>

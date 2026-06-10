@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Alert, StyleSheet, Text, View } from 'react-native'
+import { useRouter, type Href } from 'expo-router'
 import { useAuth } from '../../providers/AuthProvider'
 import { Screen } from '../../components/common/Screen'
 import { PrimaryButton } from '../../components/common/PrimaryButton'
@@ -19,6 +20,7 @@ import { useOwnerNavigation } from '../../components/layout/useOwnerNavigation'
 export function NotificationsScreen() {
   const { currentUser } = useAuth()
   const navigate = useOwnerNavigation()
+  const router = useRouter()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -61,6 +63,9 @@ export function NotificationsScreen() {
       case '/owner/utilities':
         navigate('utilities')
         break
+      case '/owner/chat':
+        router.push(notification.actionUrl as Href)
+        break
       case '/owner/rooms':
         navigate('rooms')
         break
@@ -68,6 +73,10 @@ export function NotificationsScreen() {
         Alert.alert('Contracts', 'Contracts are available on web for now.')
         break
       default:
+        if (notification.actionUrl?.startsWith('/owner/chat')) {
+          router.push(notification.actionUrl as Href)
+          return
+        }
         Alert.alert('Notification', 'No mobile destination is available for this notification.')
         break
     }

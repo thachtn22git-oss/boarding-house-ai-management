@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Alert, StyleSheet, Text, View } from 'react-native'
+import { useRouter, type Href } from 'expo-router'
 import { Screen } from '../../components/common/Screen'
 import { PrimaryButton } from '../../components/common/PrimaryButton'
 import { ListCard } from '../../components/cards/ListCard'
@@ -21,6 +22,7 @@ interface TenantNotificationsScreenProps {
 
 export function TenantNotificationsScreen({ onNavigate }: TenantNotificationsScreenProps) {
   const { currentUser } = useAuth()
+  const router = useRouter()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -62,7 +64,14 @@ export function TenantNotificationsScreen({ onNavigate }: TenantNotificationsScr
       case '/tenant/my-contract':
         onNavigate('contract')
         break
+      case '/tenant/chat':
+        router.push(notification.actionUrl as Href)
+        break
       default:
+        if (notification.actionUrl?.startsWith('/tenant/chat')) {
+          router.push(notification.actionUrl as Href)
+          return
+        }
         Alert.alert('Notification', 'No mobile destination is available for this notification.')
     }
   }

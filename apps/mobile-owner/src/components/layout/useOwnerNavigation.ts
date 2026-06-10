@@ -15,6 +15,9 @@ export function useOwnerNavigation() {
       case 'invoices':
         router.push('/owner/invoices' as Href)
         break
+      case 'chat':
+        router.push('/owner/chat' as Href)
+        break
       case 'feedback':
         router.push('/owner/feedback' as Href)
         break

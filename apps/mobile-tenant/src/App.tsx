@@ -6,6 +6,7 @@ import { AppShell } from './components/layout/AppShell'
 import type { TenantTabKey } from './constants/navigation'
 import { colors } from './constants/theme'
 import { LoginScreen } from './features/auth/LoginScreen'
+import { ChatScreen } from './features/chat/ChatScreen'
 import { TenantHomeScreen } from './features/dashboard/TenantHomeScreen'
 import {
   MyContractScreen,
@@ -37,6 +38,7 @@ function TenantApp() {
       {activeTab === 'home' ? <TenantHomeScreen onNavigate={setActiveTab} /> : null}
       {activeTab === 'invoices' ? <MyInvoicesScreen /> : null}
       {activeTab === 'feedback' ? <MyFeedbackScreen /> : null}
+      {activeTab === 'chat' ? <ChatScreen /> : null}
       {activeTab === 'notifications' ? <NotificationsScreen onNavigate={setActiveTab} /> : null}
       {activeTab === 'room' ? <MyRoomScreen /> : null}
       {activeTab === 'contract' ? <MyContractScreen /> : null}

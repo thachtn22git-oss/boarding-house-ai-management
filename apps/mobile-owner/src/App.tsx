@@ -6,6 +6,7 @@ import { AppShell } from './components/layout/AppShell'
 import { colors } from './constants/theme'
 import type { OwnerTabKey } from './constants/navigation'
 import { LoginScreen } from './features/auth/LoginScreen'
+import { ChatScreen } from './features/chat/ChatScreen'
 import { DashboardScreen } from './features/dashboard/DashboardScreen'
 import {
   FeedbackScreen,
@@ -38,6 +39,7 @@ function OwnerApp() {
       {activeTab === 'dashboard' ? <DashboardScreen /> : null}
       {activeTab === 'rooms' ? <RoomsScreen /> : null}
       {activeTab === 'invoices' ? <InvoicesScreen /> : null}
+      {activeTab === 'chat' ? <ChatScreen /> : null}
       {activeTab === 'feedback' ? <FeedbackScreen /> : null}
       {activeTab === 'tenants' ? <TenantsScreen /> : null}
       {activeTab === 'contracts' ? <ContractsScreen /> : null}

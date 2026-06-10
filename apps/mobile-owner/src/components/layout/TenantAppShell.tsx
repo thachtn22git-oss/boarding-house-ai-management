@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../providers/AuthProvider'
 import { tenantTabs, type TenantTabKey } from '../../constants/navigation'
 import { colors, spacing } from '../../constants/theme'
+import { useChatUnreadCount } from '../../features/chat/useChatUnreadCount'
 
 interface TenantAppShellProps {
   activeTab: TenantTabKey
@@ -11,6 +12,7 @@ interface TenantAppShellProps {
 
 export function TenantAppShell({ activeTab, children, onChangeTab }: TenantAppShellProps) {
   const { currentUser } = useAuth()
+  const chatUnreadCount = useChatUnreadCount()
 
   return (
     <View style={styles.container}>
@@ -34,7 +36,12 @@ export function TenantAppShell({ activeTab, children, onChangeTab }: TenantAppSh
               onPress={() => onChangeTab(item.key)}
               style={[styles.tabItem, isActive ? styles.activeTabItem : null]}
             >
-              <Text style={[styles.tabLabel, isActive ? styles.activeTabLabel : null]}>{item.label}</Text>
+              <View>
+                <Text style={[styles.tabLabel, isActive ? styles.activeTabLabel : null]}>{item.label}</Text>
+                {item.key === 'chat' && chatUnreadCount > 0 ? (
+                  <Text style={styles.badge}>{chatUnreadCount > 99 ? '99+' : chatUnreadCount}</Text>
+                ) : null}
+              </View>
             </Pressable>
           )
         })}
@@ -129,5 +136,20 @@ const styles = StyleSheet.create({
   },
   activeTabLabel: {
     color: colors.surface,
+  },
+  badge: {
+    position: 'absolute',
+    right: -18,
+    top: -14,
+    minWidth: 20,
+    overflow: 'hidden',
+    borderRadius: 999,
+    backgroundColor: colors.danger,
+    color: colors.surface,
+    fontSize: 10,
+    fontWeight: '800',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    textAlign: 'center',
   },
 })

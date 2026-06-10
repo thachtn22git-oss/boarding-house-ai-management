@@ -2,6 +2,7 @@ export type OwnerTabKey =
   | 'dashboard'
   | 'rooms'
   | 'invoices'
+  | 'chat'
   | 'feedback'
   | 'more'
   | 'tenants'
@@ -19,7 +20,7 @@ export const ownerTabs: NavigationItem[] = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'rooms', label: 'Rooms' },
   { key: 'invoices', label: 'Invoices' },
-  { key: 'feedback', label: 'Feedback' },
+  { key: 'chat', label: 'Chat' },
   { key: 'more', label: 'More' },
 ]
 
@@ -35,6 +36,7 @@ export type TenantTabKey =
   | 'home'
   | 'invoices'
   | 'feedback'
+  | 'chat'
   | 'notifications'
   | 'more'
   | 'room'
@@ -51,7 +53,7 @@ export const tenantTabs: TenantNavigationItem[] = [
   { key: 'home', label: 'Home' },
   { key: 'invoices', label: 'Invoices' },
   { key: 'feedback', label: 'Feedback' },
-  { key: 'notifications', label: 'Alerts' },
+  { key: 'chat', label: 'Chat' },
   { key: 'more', label: 'More' },
 ]
 
@@ -59,5 +61,6 @@ export const tenantMoreItems: TenantNavigationItem[] = [
   { key: 'room', label: 'My Room' },
   { key: 'contract', label: 'My Contract' },
   { key: 'utilities', label: 'My Utilities' },
+  { key: 'notifications', label: 'Notifications' },
   { key: 'profile', label: 'Profile' },
 ]

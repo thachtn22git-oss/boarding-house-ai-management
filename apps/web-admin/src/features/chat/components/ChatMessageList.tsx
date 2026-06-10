@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react'
+
 import type { ChatMessage } from '../types'
 import { formatChatDate } from './chatDisplay'
 
@@ -12,6 +14,12 @@ function ChatMessageList({
   currentUserId,
   loading,
 }: ChatMessageListProps) {
+  const bottomRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [messages])
+
   if (loading) {
     return <div className="chat-message-state">Loading messages...</div>
   }
@@ -42,6 +50,7 @@ function ChatMessageList({
           </article>
         )
       })}
+      <div ref={bottomRef} />
     </div>
   )
 }

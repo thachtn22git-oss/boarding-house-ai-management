@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { FormEvent } from 'react'
+import type { FormEvent, KeyboardEvent } from 'react'
 
 type ChatMessageInputProps = {
   disabled?: boolean
@@ -17,22 +17,37 @@ function ChatMessageInput({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
-    if (!message.trim()) {
+    const nextMessage = message.trim()
+
+    if (!nextMessage) {
       return
     }
 
-    await onSend(message)
+    await onSend(nextMessage)
     setMessage('')
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+
+      if (!message.trim() || disabled || sending) {
+        return
+      }
+
+      void onSend(message.trim()).then(() => setMessage(''))
+    }
   }
 
   return (
     <form className="chat-message-input" onSubmit={handleSubmit}>
-      <input
-        type="text"
+      <textarea
         value={message}
         placeholder="Type a message"
+        rows={1}
         disabled={disabled || sending}
         onChange={(event) => setMessage(event.target.value)}
+        onKeyDown={handleKeyDown}
       />
       <button
         className="primary-button"

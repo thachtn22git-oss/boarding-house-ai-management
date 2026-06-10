@@ -15,6 +15,9 @@ export function useTenantNavigation() {
       case 'feedback':
         router.push('/tenant/my-feedback' as Href)
         break
+      case 'chat':
+        router.push('/tenant/chat' as Href)
+        break
       case 'notifications':
         router.push('/tenant/notifications' as Href)
         break

@@ -64,7 +64,14 @@ export function NotificationsScreen({ onNavigate }: NotificationsScreenProps) {
       case '/tenant/my-contract':
         onNavigate('contract')
         break
+      case '/tenant/chat':
+        onNavigate('chat')
+        break
       default:
+        if (notification.actionUrl?.startsWith('/tenant/chat')) {
+          onNavigate('chat')
+          return
+        }
         Alert.alert('Notification', 'No mobile destination is available for this notification.')
         break
     }

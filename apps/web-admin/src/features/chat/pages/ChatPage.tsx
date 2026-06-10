@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 import { useAuth } from '../../auth/useAuth'
 import ChatContactList from '../components/ChatContactList'
@@ -25,6 +26,7 @@ import type { ChatContact, ChatMessage, ChatRoom } from '../types'
 
 function ChatPage() {
   const { currentUser } = useAuth()
+  const [searchParams] = useSearchParams()
   const [rooms, setRooms] = useState<ChatRoom[]>([])
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [contacts, setContacts] = useState<ChatContact[]>([])
@@ -65,6 +67,18 @@ function ChatPage() {
     () => rooms.find((room) => room.id === selectedRoomId) ?? null,
     [rooms, selectedRoomId],
   )
+
+  useEffect(() => {
+    const roomIdFromUrl = searchParams.get('roomId')
+
+    if (
+      roomIdFromUrl &&
+      rooms.some((room) => room.id === roomIdFromUrl) &&
+      selectedRoomId !== roomIdFromUrl
+    ) {
+      setSelectedRoomId(roomIdFromUrl)
+    }
+  }, [rooms, searchParams, selectedRoomId])
 
   useEffect(() => {
     if (!selectedRoom || !currentUser) {
