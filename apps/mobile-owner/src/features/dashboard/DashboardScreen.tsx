@@ -42,6 +42,14 @@ export function DashboardScreen() {
     void loadStats()
   }, [loadStats])
 
+  const hasNoDashboardData =
+    !loading &&
+    !error &&
+    stats !== null &&
+    stats.totalRooms === 0 &&
+    stats.monthlyRevenue === 0 &&
+    stats.unreadNotifications === 0
+
   return (
     <Screen
       loading={loading}
@@ -51,6 +59,9 @@ export function DashboardScreen() {
       title="Dashboard"
     >
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      {hasNoDashboardData ? (
+        <Text style={styles.empty}>No dashboard data yet. Create rooms, invoices, and notifications to see live metrics.</Text>
+      ) : null}
 
       <View style={styles.grid}>
         <StatCard label="Total Rooms" value={stats?.totalRooms ?? 0} />
@@ -83,5 +94,10 @@ const styles = StyleSheet.create({
   error: {
     color: colors.danger,
     fontWeight: '700',
+  },
+  empty: {
+    color: colors.muted,
+    fontSize: 15,
+    lineHeight: 22,
   },
 })

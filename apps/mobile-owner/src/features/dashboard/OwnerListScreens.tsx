@@ -10,9 +10,10 @@ import {
   getInvoices,
   getRooms,
   getTenants,
+  getTenantsWithRooms,
   getUtilities,
 } from '../../services/ownerData.service'
-import type { Contract, Feedback, Invoice, Room, Tenant, UtilityReading } from '../../types/models'
+import type { Contract, Feedback, Invoice, Room, TenantWithRoom, UtilityReading } from '../../types/models'
 import { formatCurrency } from '../../utils/format'
 
 type Loader<T> = (ownerId: string) => Promise<T[]>
@@ -94,14 +95,15 @@ export function RoomsScreen() {
 
 export function TenantsScreen() {
   return (
-    <DataListScreen<Tenant>
+    <DataListScreen<TenantWithRoom>
       emptyMessage="No tenants found."
-      loader={getTenants}
+      loader={getTenantsWithRooms}
       renderItem={(tenant) => (
         <View style={styles.item}>
           <Text style={styles.itemTitle}>{tenant.fullName}</Text>
-          <Text style={styles.meta}>{tenant.email}</Text>
-          <Text style={styles.meta}>{tenant.status}</Text>
+          <Text style={styles.meta}>Phone: {tenant.phone || 'Not available'}</Text>
+          <Text style={styles.meta}>Room: {tenant.room ? `${tenant.room.roomNumber} - ${tenant.room.roomType}` : 'Not assigned'}</Text>
+          <Text style={styles.meta}>Status: {formatLabel(tenant.status)}</Text>
         </View>
       )}
       subtitle="Tenant records for your boarding house."
@@ -172,7 +174,10 @@ export function FeedbackScreen() {
       renderItem={(feedback) => (
         <View style={styles.item}>
           <Text style={styles.itemTitle}>{feedback.title}</Text>
-          <Text style={styles.meta}>{feedback.priority} | {feedback.status}</Text>
+          <Text style={styles.meta}>Category: {formatLabel(feedback.category)}</Text>
+          <Text style={styles.meta}>Priority: {formatLabel(feedback.priority)}</Text>
+          <Text style={styles.meta}>Sentiment: {formatLabel(feedback.sentiment)}</Text>
+          <Text style={styles.meta}>Status: {formatLabel(feedback.status)}</Text>
         </View>
       )}
       subtitle="Review tenant feedback and priorities."
@@ -183,6 +188,15 @@ export function FeedbackScreen() {
 
 function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1)
+}
+
+function formatLabel(value?: string) {
+  if (!value) return 'Not available'
+
+  return value
+    .split('_')
+    .map((part) => capitalize(part))
+    .join(' ')
 }
 
 const styles = StyleSheet.create({

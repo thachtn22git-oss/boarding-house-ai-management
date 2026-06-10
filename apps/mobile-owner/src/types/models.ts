@@ -6,6 +6,16 @@ export type UtilityType = 'electricity' | 'water'
 export type UtilityReadingStatus = 'draft' | 'confirmed' | 'billed'
 export type FeedbackStatus = 'new' | 'in_review' | 'resolved' | 'rejected'
 export type FeedbackPriority = 'low' | 'medium' | 'high' | 'urgent'
+export type FeedbackCategory =
+  | 'electricity'
+  | 'water'
+  | 'internet'
+  | 'security'
+  | 'cleanliness'
+  | 'maintenance'
+  | 'billing'
+  | 'other'
+export type SentimentLabel = 'positive' | 'neutral' | 'negative'
 
 export interface Room {
   id: string
@@ -70,6 +80,12 @@ export interface Feedback {
   tenantId?: string
   roomId?: string
   title: string
+  category?: FeedbackCategory
   priority: FeedbackPriority
+  sentiment?: SentimentLabel
   status: FeedbackStatus
+}
+
+export interface TenantWithRoom extends Tenant {
+  room?: Room | null
 }
