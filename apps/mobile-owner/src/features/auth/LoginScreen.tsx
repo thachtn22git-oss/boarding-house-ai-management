@@ -6,7 +6,11 @@ import { PrimaryButton } from '../../components/common/PrimaryButton'
 import { colors, spacing } from '../../constants/theme'
 import { useAuth } from '../../providers/AuthProvider'
 
-export function LoginScreen() {
+interface LoginScreenProps {
+  role: 'owner' | 'tenant'
+}
+
+export function LoginScreen({ role }: LoginScreenProps) {
   const { login, loading, error } = useAuth()
   const router = useRouter()
   const [email, setEmail] = useState('')
@@ -27,8 +31,8 @@ export function LoginScreen() {
     }
 
     try {
-      await login(email, password)
-      router.replace('/dashboard' as Href)
+      await login(email, password, role)
+      router.replace((role === 'owner' ? '/owner/dashboard' : '/tenant/home') as Href)
     } catch (loginError) {
       setFormError(loginError instanceof Error ? loginError.message : 'Something went wrong. Please try again.')
     }
@@ -38,16 +42,24 @@ export function LoginScreen() {
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container}>
         <View style={styles.brandPanel}>
-          <Text style={styles.eyebrow}>OWNER PORTAL</Text>
+          <Text style={styles.eyebrow}>{role === 'owner' ? 'OWNER PORTAL' : 'TENANT PORTAL'}</Text>
           <Text style={styles.brand}>Boarding House AI</Text>
           <Text style={styles.subtitle}>Smart boarding house management platform</Text>
         </View>
 
         <View style={styles.card}>
           <Text style={styles.title}>Sign in</Text>
-          <Text style={styles.description}>Use an owner account to manage rooms, invoices, feedback, and alerts.</Text>
+          <Text style={styles.description}>
+            {role === 'owner'
+              ? 'Use an owner account to manage rooms, invoices, feedback, and alerts.'
+              : 'Use your tenant account to view invoices, utilities, feedback, and alerts.'}
+          </Text>
           <View style={styles.hintBox}>
-            <Text style={styles.hintText}>Only owner accounts can access this mobile app.</Text>
+            <Text style={styles.hintText}>
+              {role === 'owner'
+                ? 'Only owner accounts can access the Owner portal.'
+                : 'Only tenant accounts can access the Tenant portal.'}
+            </Text>
           </View>
 
           <View style={styles.fieldGroup}>
@@ -80,6 +92,12 @@ export function LoginScreen() {
           {formError || error ? <Text style={styles.error}>{formError ?? error}</Text> : null}
 
           <PrimaryButton disabled={loading} label={loading ? 'Signing in...' : 'Sign in'} onPress={handleLogin} />
+          <PrimaryButton
+            disabled={loading}
+            label="Switch role"
+            onPress={() => router.replace('/select-role' as Href)}
+            variant="secondary"
+          />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

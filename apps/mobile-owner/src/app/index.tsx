@@ -14,13 +14,14 @@ export default function IndexRoute() {
     )
   }
 
-  if (!currentUser) return <Redirect href={'/login' as Href} />
+  if (!currentUser) return <Redirect href={'/select-role' as Href} />
 
-  if (currentUser.role === 'owner') return <Redirect href={'/dashboard' as Href} />
+  if (currentUser.role === 'owner') return <Redirect href={'/owner/dashboard' as Href} />
+  if (currentUser.role === 'tenant') return <Redirect href={'/tenant/home' as Href} />
 
   return (
     <View style={styles.messageContainer}>
-      <Text style={styles.message}>This account is not allowed to access the Owner app.</Text>
+      <Text style={styles.message}>This account role is not supported by the mobile app.</Text>
     </View>
   )
 }

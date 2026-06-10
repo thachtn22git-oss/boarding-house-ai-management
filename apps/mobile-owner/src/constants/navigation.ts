@@ -30,3 +30,34 @@ export const ownerMoreItems: NavigationItem[] = [
   { key: 'notifications', label: 'Notifications' },
   { key: 'profile', label: 'Profile' },
 ]
+
+export type TenantTabKey =
+  | 'home'
+  | 'invoices'
+  | 'feedback'
+  | 'notifications'
+  | 'more'
+  | 'room'
+  | 'contract'
+  | 'utilities'
+  | 'profile'
+
+export interface TenantNavigationItem {
+  key: TenantTabKey
+  label: string
+}
+
+export const tenantTabs: TenantNavigationItem[] = [
+  { key: 'home', label: 'Home' },
+  { key: 'invoices', label: 'Invoices' },
+  { key: 'feedback', label: 'Feedback' },
+  { key: 'notifications', label: 'Alerts' },
+  { key: 'more', label: 'More' },
+]
+
+export const tenantMoreItems: TenantNavigationItem[] = [
+  { key: 'room', label: 'My Room' },
+  { key: 'contract', label: 'My Contract' },
+  { key: 'utilities', label: 'My Utilities' },
+  { key: 'profile', label: 'Profile' },
+]

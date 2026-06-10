@@ -1,19 +1,19 @@
 import { PropsWithChildren } from 'react'
 import { Redirect, type Href } from 'expo-router'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
-import { AppShell } from './AppShell'
-import { useOwnerNavigation } from './useOwnerNavigation'
+import { TenantAppShell } from './TenantAppShell'
+import { useTenantNavigation } from './useTenantNavigation'
 import { colors } from '../../constants/theme'
-import type { OwnerTabKey } from '../../constants/navigation'
+import type { TenantTabKey } from '../../constants/navigation'
 import { useAuth } from '../../providers/AuthProvider'
 
-interface OwnerRouteProps extends PropsWithChildren {
-  activeTab: OwnerTabKey
+interface TenantRouteProps extends PropsWithChildren {
+  activeTab: TenantTabKey
 }
 
-export function OwnerRoute({ activeTab, children }: OwnerRouteProps) {
+export function TenantRoute({ activeTab, children }: TenantRouteProps) {
   const { currentUser, loading } = useAuth()
-  const navigate = useOwnerNavigation()
+  const navigate = useTenantNavigation()
 
   if (loading) {
     return (
@@ -23,20 +23,20 @@ export function OwnerRoute({ activeTab, children }: OwnerRouteProps) {
     )
   }
 
-  if (!currentUser) return <Redirect href={'/login?role=owner' as Href} />
+  if (!currentUser) return <Redirect href={'/login?role=tenant' as Href} />
 
-  if (currentUser.role !== 'owner') {
+  if (currentUser.role !== 'tenant') {
     return (
       <View style={styles.centered}>
-        <Text style={styles.message}>This account is not allowed to access the Owner portal.</Text>
+        <Text style={styles.message}>This account is not allowed to access the Tenant portal.</Text>
       </View>
     )
   }
 
   return (
-    <AppShell activeTab={activeTab} onChangeTab={navigate}>
+    <TenantAppShell activeTab={activeTab} onChangeTab={navigate}>
       {children}
-    </AppShell>
+    </TenantAppShell>
   )
 }
 

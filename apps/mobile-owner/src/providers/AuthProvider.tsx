@@ -2,13 +2,13 @@ import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useSt
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth'
 import { doc, getDoc } from 'firebase/firestore'
 import { auth, db } from '../config/firebase'
-import type { AppUser } from '../types/user'
+import type { AppUser, UserRole } from '../types/user'
 
 interface AuthContextValue {
   currentUser: AppUser | null
   loading: boolean
   error: string | null
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string, expectedRole?: 'owner' | 'tenant') => Promise<void>
   logout: () => Promise<void>
 }
 
@@ -24,13 +24,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (!snapshot.exists()) throw new Error('User profile was not found.')
 
     const data = snapshot.data()
-    if (data.role !== 'owner') throw new Error('This account is not allowed to access the Owner app.')
+    if (data.role !== 'owner' && data.role !== 'tenant' && data.role !== 'admin') {
+      throw new Error('This account role is not supported.')
+    }
 
     return {
       uid,
-      fullName: String(data.fullName ?? 'Owner User'),
+      fullName: String(data.fullName ?? 'Mobile User'),
       email: String(data.email ?? ''),
-      role: 'owner',
+      role: data.role as UserRole,
     } satisfies AppUser
   }
 
@@ -60,13 +62,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return unsubscribe
   }, [])
 
-  async function login(email: string, password: string) {
+  async function login(email: string, password: string, expectedRole?: 'owner' | 'tenant') {
     setLoading(true)
     setError(null)
 
     try {
       const credential = await signInWithEmailAndPassword(auth, email.trim(), password)
       const profile = await loadProfile(credential.user.uid)
+
+      if (expectedRole && profile.role !== expectedRole) {
+        throw new Error(getRoleAccessMessage(expectedRole))
+      }
+
       setCurrentUser(profile)
     } catch (authError) {
       const message = getAuthErrorMessage(authError)
@@ -105,9 +112,19 @@ function getAuthErrorMessage(error: unknown) {
   if (code === 'auth/user-not-found') return 'No account found with this email.'
   if (code === 'auth/wrong-password') return 'Incorrect password.'
   if (code === 'auth/too-many-requests') return 'Too many attempts. Please try again later.'
-  if (error instanceof Error && error.message === 'This account is not allowed to access the Owner app.') {
+  if (
+    error instanceof Error &&
+    (error.message === 'This account is not allowed to access the Owner portal.' ||
+      error.message === 'This account is not allowed to access the Tenant portal.')
+  ) {
     return error.message
   }
 
   return 'Something went wrong. Please try again.'
+}
+
+function getRoleAccessMessage(role: 'owner' | 'tenant') {
+  return role === 'owner'
+    ? 'This account is not allowed to access the Owner portal.'
+    : 'This account is not allowed to access the Tenant portal.'
 }

@@ -49,8 +49,13 @@ export interface Contract {
   tenantId: string
   roomId: string
   contractCode: string
+  startDate?: string
   endDate: string
+  monthlyRent?: number
+  deposit?: number
+  paymentDueDay?: number
   status: ContractStatus
+  terms?: string
 }
 
 export interface Invoice {
@@ -108,6 +113,7 @@ export interface Feedback {
   content?: string
   ownerResponse?: string
   aiSummary?: string
+  createdAt?: unknown
 }
 
 export interface TenantWithRoom extends Tenant {

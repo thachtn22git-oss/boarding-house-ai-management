@@ -7,37 +7,37 @@ export function useOwnerNavigation() {
   return (tab: OwnerTabKey) => {
     switch (tab) {
       case 'dashboard':
-        router.push('/dashboard' as Href)
+        router.push('/owner/dashboard' as Href)
         break
       case 'rooms':
-        router.push('/rooms' as Href)
+        router.push('/owner/rooms' as Href)
         break
       case 'invoices':
-        router.push('/invoices' as Href)
+        router.push('/owner/invoices' as Href)
         break
       case 'feedback':
-        router.push('/feedback' as Href)
+        router.push('/owner/feedback' as Href)
         break
       case 'tenants':
-        router.push('/tenants' as Href)
+        router.push('/owner/tenants' as Href)
         break
       case 'contracts':
-        router.push('/contracts' as Href)
+        router.push('/owner/contracts' as Href)
         break
       case 'utilities':
-        router.push('/utilities' as Href)
+        router.push('/owner/utilities' as Href)
         break
       case 'notifications':
-        router.push('/notifications' as Href)
+        router.push('/owner/notifications' as Href)
         break
       case 'profile':
-        router.push('/profile' as Href)
+        router.push('/owner/profile' as Href)
         break
       case 'more':
-        router.push('/more' as Href)
+        router.push('/owner/more' as Href)
         break
       default:
-        router.push('/dashboard' as Href)
+        router.push('/owner/dashboard' as Href)
         break
     }
   }

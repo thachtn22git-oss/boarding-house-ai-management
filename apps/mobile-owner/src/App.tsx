@@ -31,7 +31,7 @@ function OwnerApp() {
     )
   }
 
-  if (!currentUser) return <LoginScreen />
+  if (!currentUser) return <LoginScreen role="owner" />
 
   return (
     <AppShell activeTab={activeTab} onChangeTab={setActiveTab}>
