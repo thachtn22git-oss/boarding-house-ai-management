@@ -9,7 +9,7 @@ Python, FastAPI, and scikit-learn. It does not call paid external AI APIs.
 - Feedback category classification
 - Feedback priority suggestion
 - Confidence scores for every prediction
-- Rule-free local model training from a synthetic boarding house dataset
+- Local model training from a synthetic boarding house dataset
 
 ## Setup
 
@@ -22,8 +22,13 @@ pip install -r requirements.txt
 ## Dataset
 
 The feedback dataset is synthetic and generated locally for boarding house and
-apartment rental management scenarios. It covers electricity, water, internet,
-security, cleanliness, maintenance, billing, and general tenant feedback.
+apartment rental management scenarios. It uses concise, high-signal English
+sentences with one issue per row. Labels are designed for boarding house tenant
+feedback across electricity, water, internet, security, cleanliness,
+maintenance, billing, and general requests.
+
+The generated dataset contains 1200 rows with exactly 150 examples per category.
+Models should be retrained after every dataset change.
 
 No external AI API is used to generate or train the models.
 

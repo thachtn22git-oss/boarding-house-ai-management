@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -9,6 +10,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATASET_PATH = PROJECT_ROOT / "datasets" / "feedback_dataset.csv"
 
 EXPECTED_COLUMNS = ["content", "sentiment", "category", "priority"]
+EXPECTED_ROW_COUNT = 1200
+EXPECTED_CATEGORY_COUNT = 150
 EXPECTED_LABELS = {
     "sentiment": {"positive", "neutral", "negative"},
     "category": {
@@ -25,12 +28,29 @@ EXPECTED_LABELS = {
 }
 
 
+def normalize(text: str) -> str:
+    return re.sub(r"\s+", " ", str(text).strip().lower())
+
+
+def word_count(text: str) -> int:
+    return len(re.findall(r"\b[\w'-]+\b", str(text)))
+
+
 def print_distribution(dataset: pd.DataFrame, column: str) -> None:
     counts = dataset[column].value_counts().sort_index()
     percentages = dataset[column].value_counts(normalize=True).sort_index() * 100
     print(f"\n{column}:")
     for label, count in counts.items():
         print(f"  {label}: {count} ({percentages[label]:.2f}%)")
+
+
+def print_examples(dataset: pd.DataFrame) -> None:
+    print("\nExamples by category:")
+    for category in sorted(EXPECTED_LABELS["category"]):
+        print(f"\n{category}:")
+        examples = dataset[dataset["category"] == category]["content"].head(5)
+        for example in examples:
+            print(f"  - {example}")
 
 
 def main() -> None:
@@ -50,24 +70,31 @@ def main() -> None:
     if missing_columns:
         failures.append(f"Missing columns: {', '.join(missing_columns)}")
 
-    if len(dataset) < 1500:
-        failures.append("Dataset must contain at least 1500 rows.")
+    if len(dataset) != EXPECTED_ROW_COUNT:
+        failures.append(f"Dataset must contain exactly {EXPECTED_ROW_COUNT} rows.")
 
     if dataset[EXPECTED_COLUMNS].isna().any().any():
         failures.append("Dataset contains missing values.")
 
-    duplicate_rate = dataset["content"].duplicated().mean() * 100
+    normalized_content = dataset["content"].map(normalize)
+    duplicate_count = int(normalized_content.duplicated().sum())
+    duplicate_rate = duplicate_count / max(len(dataset), 1) * 100
+    print(f"Duplicate content count: {duplicate_count}")
     print(f"Duplicate content rate: {duplicate_rate:.2f}%")
-    if duplicate_rate > 3:
-        failures.append("Duplicate content rate is above 3%.")
+    if duplicate_count > 0:
+        warnings.append("Duplicate ratio is above 0%.")
+        failures.append("Dataset contains duplicate content.")
 
-    content_lengths = dataset["content"].astype(str).str.split().str.len()
+    lengths = dataset["content"].map(word_count)
     print(
         "Content length words: "
-        f"min={content_lengths.min()}, "
-        f"median={content_lengths.median():.1f}, "
-        f"max={content_lengths.max()}"
+        f"min={lengths.min()}, "
+        f"median={lengths.median():.1f}, "
+        f"max={lengths.max()}"
     )
+    long_count = int((lengths > 20).sum())
+    if long_count > 0:
+        warnings.append(f"{long_count} sentences have more than 20 words.")
 
     for column, expected_labels in EXPECTED_LABELS.items():
         actual_labels = set(dataset[column].dropna().unique())
@@ -84,35 +111,19 @@ def main() -> None:
     category_counts = dataset["category"].value_counts()
     for category in EXPECTED_LABELS["category"]:
         count = int(category_counts.get(category, 0))
-        if count < 160:
-            failures.append(f"Category {category} has fewer than 160 rows.")
-        if count > 230:
-            failures.append(f"Category {category} exceeds 230 rows.")
-
-    sentiment_distribution = dataset["sentiment"].value_counts(normalize=True)
-    priority_distribution = dataset["priority"].value_counts(normalize=True)
-
-    targets = {
-        "negative": (sentiment_distribution.get("negative", 0), 0.55),
-        "neutral": (sentiment_distribution.get("neutral", 0), 0.25),
-        "positive": (sentiment_distribution.get("positive", 0), 0.20),
-        "low": (priority_distribution.get("low", 0), 0.20),
-        "medium": (priority_distribution.get("medium", 0), 0.35),
-        "high": (priority_distribution.get("high", 0), 0.30),
-        "urgent": (priority_distribution.get("urgent", 0), 0.15),
-    }
-    for label, (actual, target) in targets.items():
-        if abs(actual - target) > 0.08:
-            warnings.append(
-                f"{label} distribution is {actual * 100:.2f}%, target is around {target * 100:.0f}%."
+        if count != EXPECTED_CATEGORY_COUNT:
+            failures.append(
+                f"Category {category} must have {EXPECTED_CATEGORY_COUNT} rows, found {count}."
             )
+
+    print_examples(dataset)
 
     if warnings:
         print("\nWarnings:")
         for warning in warnings:
             print(f"  - {warning}")
     else:
-        print("\nNo major imbalance warnings.")
+        print("\nNo dataset warnings.")
 
     if failures:
         print("\nFailures:")

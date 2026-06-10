@@ -21,15 +21,15 @@ TEST_SIZE = 0.2
 
 MANUAL_EXAMPLES = [
     (
-        "There are sparks from the power socket.",
+        "The room is very beautiful.",
         {
-            "sentiment": "negative",
-            "category": "electricity",
-            "priority": "urgent",
+            "sentiment": "positive",
+            "category": "other or cleanliness",
+            "priority": "low",
         },
     ),
     (
-        "The Wi-Fi is slow again tonight.",
+        "The Wi-Fi is very slow.",
         {
             "sentiment": "negative",
             "category": "internet",
@@ -37,15 +37,31 @@ MANUAL_EXAMPLES = [
         },
     ),
     (
-        "Thank you for cleaning the hallway.",
+        "There are sparks from the socket.",
         {
-            "sentiment": "positive",
-            "category": "cleanliness",
-            "priority": "low",
+            "sentiment": "negative",
+            "category": "electricity",
+            "priority": "urgent",
         },
     ),
     (
-        "I have a question about my rent invoice.",
+        "The water pressure is weak.",
+        {
+            "sentiment": "negative",
+            "category": "water",
+            "priority": "medium",
+        },
+    ),
+    (
+        "The door lock is broken.",
+        {
+            "sentiment": "negative",
+            "category": "security",
+            "priority": "urgent",
+        },
+    ),
+    (
+        "I have a question about my invoice.",
         {
             "sentiment": "neutral",
             "category": "billing",
@@ -53,11 +69,35 @@ MANUAL_EXAMPLES = [
         },
     ),
     (
-        "The door lock is broken and strangers can enter.",
+        "The air conditioner is broken.",
         {
             "sentiment": "negative",
+            "category": "maintenance",
+            "priority": "high",
+        },
+    ),
+    (
+        "The hallway is dirty.",
+        {
+            "sentiment": "negative",
+            "category": "cleanliness",
+            "priority": "medium",
+        },
+    ),
+    (
+        "The invoice is clear and correct.",
+        {
+            "sentiment": "positive",
+            "category": "billing",
+            "priority": "low",
+        },
+    ),
+    (
+        "The camera works properly.",
+        {
+            "sentiment": "positive",
             "category": "security",
-            "priority": "urgent",
+            "priority": "low",
         },
     ),
 ]

@@ -10,6 +10,7 @@ import joblib
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score
+from sklearn.multiclass import OneVsRestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -36,17 +37,21 @@ def create_pipeline() -> Pipeline:
                 "tfidf",
                 TfidfVectorizer(
                     ngram_range=(1, 2),
-                    min_df=2,
+                    min_df=1,
                     max_df=0.95,
                     sublinear_tf=True,
+                    strip_accents="unicode",
                 ),
             ),
             (
                 "classifier",
-                LogisticRegression(
-                    max_iter=1000,
-                    class_weight="balanced",
-                    random_state=RANDOM_STATE,
+                OneVsRestClassifier(
+                    LogisticRegression(
+                        max_iter=2000,
+                        class_weight="balanced",
+                        random_state=RANDOM_STATE,
+                        solver="liblinear",
+                    ),
                 ),
             ),
         ],

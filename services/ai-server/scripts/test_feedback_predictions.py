@@ -15,27 +15,47 @@ from app.config import CATEGORY_MODEL_PATH, PRIORITY_MODEL_PATH, SENTIMENT_MODEL
 from app.utils.text_preprocessing import clean_text
 
 
-EXAMPLES = [
-    "There are sparks from the power socket.",
-    "The Wi-Fi is slow again tonight.",
-    "Thank you for cleaning the hallway.",
-    "I have a question about my rent invoice.",
-    "The door lock is broken and strangers can enter.",
-    "Water pressure is very weak in the morning.",
-    "The bathroom has a bad smell and needs cleaning.",
-    "My air conditioner has stopped working completely.",
-    "I was charged twice for rent this month.",
-    "The security camera near the entrance is not working.",
-    "The hallway light was fixed quickly, thank you.",
-    "Dirty water is coming from the faucet.",
-    "My package delivery was misplaced.",
-    "There is mold spreading on the bathroom wall.",
-    "The internet has been down for the whole day.",
-    "I want to ask about my deposit refund.",
-    "The ceiling is leaking water near my bed.",
-    "The parking area feels unsafe at night.",
-    "The payment receipt arrived quickly.",
-    "Someone is trying to force the entrance door.",
+TEST_CASES = [
+    {
+        "text": "The room is very beautiful.",
+        "expected": "positive, other or cleanliness, low",
+    },
+    {
+        "text": "The Wi-Fi is very slow.",
+        "expected": "negative, internet, medium",
+    },
+    {
+        "text": "There are sparks from the socket.",
+        "expected": "negative, electricity, urgent",
+    },
+    {
+        "text": "The water pressure is weak.",
+        "expected": "negative, water, medium",
+    },
+    {
+        "text": "The door lock is broken.",
+        "expected": "negative, security, urgent",
+    },
+    {
+        "text": "I have a question about my invoice.",
+        "expected": "neutral, billing, low or medium",
+    },
+    {
+        "text": "The air conditioner is broken.",
+        "expected": "negative, maintenance, high",
+    },
+    {
+        "text": "The hallway is dirty.",
+        "expected": "negative, cleanliness, medium",
+    },
+    {
+        "text": "The invoice is clear and correct.",
+        "expected": "positive, billing, low",
+    },
+    {
+        "text": "The camera works properly.",
+        "expected": "positive, security, low",
+    },
 ]
 
 
@@ -68,10 +88,12 @@ def predict_with_confidence(model: Any, text: str) -> tuple[str, float]:
 def main() -> None:
     models = load_models()
 
-    for index, text in enumerate(EXAMPLES, start=1):
+    for index, test_case in enumerate(TEST_CASES, start=1):
+        text = test_case["text"]
         cleaned_text = clean_text(text)
-        print(f"\nExample {index}")
-        print(f"Text: {text}")
+        print(f"\nTest case {index}")
+        print(f"Input: {text}")
+        print(f"Expected: {test_case['expected']}")
         for model_name, model in models.items():
             label, confidence = predict_with_confidence(model, cleaned_text)
             print(f"{model_name}: {label} ({confidence:.4f})")

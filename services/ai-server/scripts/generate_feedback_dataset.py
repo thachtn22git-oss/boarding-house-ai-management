@@ -2,582 +2,637 @@ from __future__ import annotations
 
 import csv
 import random
-from dataclasses import dataclass
+import re
 from pathlib import Path
 
 
+random.seed(42)
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATASET_PATH = PROJECT_ROOT / "datasets" / "feedback_dataset.csv"
-RANDOM_STATE = 42
 
-CATEGORY_COUNTS = {
-    "electricity": 188,
-    "water": 188,
-    "internet": 188,
-    "security": 188,
-    "cleanliness": 187,
-    "maintenance": 187,
-    "billing": 187,
-    "other": 187,
-}
-
-LABEL_PLAN = [
-    ("positive", "low", 300),
-    ("neutral", "medium", 375),
-    ("negative", "medium", 150),
-    ("negative", "high", 450),
-    ("negative", "urgent", 225),
+CATEGORIES = [
+    "electricity",
+    "water",
+    "internet",
+    "security",
+    "cleanliness",
+    "maintenance",
+    "billing",
+    "other",
 ]
 
-ANCHOR_EXAMPLES = [
-    {
-        "content": "There are sparks from the power socket.",
-        "sentiment": "negative",
-        "category": "electricity",
-        "priority": "urgent",
-        "count": 18,
-    },
-    {
-        "content": "The door lock is broken and strangers can enter.",
-        "sentiment": "negative",
-        "category": "security",
-        "priority": "urgent",
-        "count": 18,
-    },
+CATEGORY_QUOTA = 150
+
+LABEL_QUOTAS = [
+    ("positive", "low", 37),
+    ("neutral", "low", 1),
+    ("neutral", "medium", 37),
+    ("negative", "medium", 15),
+    ("negative", "high", 37),
+    ("negative", "urgent", 23),
 ]
 
-ROOMS = [
-    "A101",
-    "A102",
-    "A203",
-    "B101",
-    "B102",
-    "B205",
-    "C301",
-    "C304",
-    "D110",
-    "D212",
-]
-
-LOCATIONS = [
-    "my room",
-    "the hallway",
-    "the shared bathroom",
-    "the front gate",
-    "the parking area",
-    "the laundry area",
-    "the staircase",
-    "the kitchen area",
-]
-
-TIMES = [
+CONTEXTS = [
+    "today",
     "this morning",
-    "since last night",
-    "for two days",
+    "tonight",
+    "again today",
+    "in room A101",
+    "in room A203",
+    "near room B102",
+    "on floor two",
+    "near the hallway",
+    "by the entrance",
+    "after work",
+    "before noon",
     "during the evening",
-    "after the rain",
     "this week",
-    "every weekend",
-    "for several hours",
+    "since yesterday",
+    "near my room",
+    "in the bathroom",
+    "at the gate",
+    "in the parking area",
+    "near the stairs",
+    "at night",
+    "during class",
+    "while studying",
+    "before payment",
+    "after cleaning",
+    "near the kitchen",
+    "in the laundry area",
+    "on the third floor",
+    "during the rain",
+    "after moving in",
+    "before checkout",
+    "for my room",
+    "for the hallway",
+    "for the shared area",
+    "near the meter",
+    "beside the door",
+    "at the window",
+    "under the sink",
+    "outside my room",
+    "near the lobby",
 ]
 
-REQUESTS = [
-    "Please check it when possible.",
-    "Could the team inspect this today?",
-    "Please let me know when someone can review it.",
-    "I would appreciate an update from the owner.",
-    "Can maintenance take a look and confirm the next step?",
-    "Please help me resolve this issue.",
+EXACT_ANCHORS = [
+    ("The room is very beautiful.", "positive", "other", "low"),
+    ("The room is clean and bright.", "positive", "cleanliness", "low"),
+    ("The room is comfortable.", "positive", "other", "low"),
+    ("The room looks great.", "positive", "other", "low"),
+    ("The room is quiet and nice.", "positive", "other", "low"),
+    ("The Wi-Fi works very well.", "positive", "internet", "low"),
+    ("The water pressure is good.", "positive", "water", "low"),
+    ("The hallway light is bright.", "positive", "electricity", "low"),
+    ("The camera works properly.", "positive", "security", "low"),
+    ("The invoice is clear.", "positive", "billing", "low"),
+    ("The invoice is clear and correct.", "positive", "billing", "low"),
+    ("The air conditioner works well.", "positive", "maintenance", "low"),
+    ("The Wi-Fi is very slow.", "negative", "internet", "medium"),
+    ("There are sparks from the socket.", "negative", "electricity", "urgent"),
+    ("The water pressure is weak.", "negative", "water", "medium"),
+    ("The door lock is broken.", "negative", "security", "urgent"),
+    ("I have a question about my invoice.", "neutral", "billing", "low"),
+    ("The air conditioner is broken.", "negative", "maintenance", "high"),
+    ("The hallway is dirty.", "negative", "cleanliness", "medium"),
 ]
 
 
-@dataclass(frozen=True)
-class TopicSet:
-    low_positive: list[str]
-    medium_neutral: list[str]
-    medium_negative: list[str]
-    high_negative: list[str]
-    urgent_negative: list[str]
-
-
-TOPICS: dict[str, TopicSet] = {
-    "electricity": TopicSet(
-        low_positive=[
-            "the hallway light was fixed quickly",
-            "the new light bulb works well",
-            "the electric meter reading was explained clearly",
-            "the room lighting is much better now",
-            "the power socket replacement was helpful",
-            "the fan switch repair was handled well",
+DATA = {
+    "electricity": {
+        "positive": [
+            "The hallway light is bright",
+            "The power works well",
+            "The socket works safely",
+            "The voltage is stable",
+            "The electric meter is clear",
+            "The breaker works properly",
+            "The room light is fixed",
+            "The ceiling light is clean",
         ],
-        medium_neutral=[
-            "I want to ask about the electric meter reading",
-            "one light in the corridor is blinking",
-            "the room light sometimes turns off",
-            "the power socket feels loose",
-            "the voltage seems unstable at night",
-            "I need clarification about electricity usage",
+        "neutral_low": [
+            "I have a question about power",
+            "Please explain the electric meter",
+            "I need the breaker location",
+            "Can you check the light switch",
         ],
-        medium_negative=[
-            "the bedroom light keeps flickering",
-            "the socket is damaged and hard to use",
-            "the electric meter number looks incorrect",
-            "the power keeps cutting for a few minutes",
-            "the voltage drops when I use the air conditioner",
-            "the hallway is too dark because several lights are broken",
+        "neutral_medium": [
+            "Please check the blinking light",
+            "Can you inspect the loose socket",
+            "Please test the room voltage",
+            "Can you review the electric meter",
+            "Please check the hallway power",
+            "Can you inspect the breaker",
         ],
-        high_negative=[
-            "there has been no power in my room for hours",
-            "the voltage is unstable and my devices keep shutting down",
-            "the main breaker trips repeatedly",
-            "several lights are broken in the staircase",
-            "the electric meter appears to be faulty",
-            "the power outage has affected my work all day",
+        "negative_medium": [
+            "The light is flickering",
+            "The socket is loose",
+            "The voltage is unstable",
+            "The electric meter looks wrong",
+            "The hallway light is broken",
         ],
-        urgent_negative=[
-            "sparks are coming from the wall socket",
-            "there are sparks from the power socket",
-            "sparks from the power socket may cause a fire",
-            "the outlet smells like burning plastic",
-            "the electrical panel is making a buzzing sound",
-            "there is a fire risk near the damaged socket",
-            "smoke came from the power adapter area",
-            "the exposed wire near the door is dangerous",
+        "negative_high": [
+            "The power is out",
+            "The breaker keeps tripping",
+            "The room has no power",
+            "The electric meter is broken",
+            "The main light is broken",
+            "The voltage keeps dropping",
         ],
-    ),
-    "water": TopicSet(
-        low_positive=[
-            "the water pressure is better after the repair",
-            "thank you for fixing the leaking faucet",
-            "the water bill explanation was clear",
-            "the drain cleaning helped a lot",
-            "the bathroom water issue was handled quickly",
-            "the new shower head works well",
+        "negative_urgent": [
+            "There are sparks from the socket",
+            "The socket smells burnt",
+            "The breaker is smoking",
+            "The wire is exposed",
+            "The outlet is sparking",
+            "There is a fire risk",
         ],
-        medium_neutral=[
-            "I want to ask about this month's water bill",
-            "the water pressure is weak in the morning",
-            "the bathroom drain is slow",
-            "the water color looks different today",
-            "the faucet drips sometimes",
-            "I need the latest water meter reading",
+    },
+    "water": {
+        "positive": [
+            "The water pressure is good",
+            "The shower works well",
+            "The faucet is fixed",
+            "The drain is clear",
+            "The water is clean",
+            "The pipe repair helped",
+            "The bathroom water is stable",
+            "The sink works well",
         ],
-        medium_negative=[
-            "the water pressure is very weak",
-            "dirty water came from the faucet",
-            "the shower drain is clogged again",
-            "the sink keeps dripping at night",
-            "the water bill seems higher than usual",
-            "the pipe under the sink leaks slowly",
+        "neutral_low": [
+            "Please check the water meter",
+            "I have a question about water",
+            "Can you show the water bill",
+            "Please confirm the shower schedule",
         ],
-        high_negative=[
-            "there is no water in my room for many hours",
-            "a pipe leak is spreading water across the bathroom",
-            "the drain is fully clogged and cannot be used",
-            "the water is brown and smells bad",
-            "the water tank seems empty again",
-            "the leak near the shared bathroom is getting worse",
+        "neutral_medium": [
+            "Please inspect the weak pressure",
+            "Can you check the slow drain",
+            "Please review the water meter",
+            "Can you inspect the faucet",
+            "Please check the shower flow",
+            "Can you check the water tank",
         ],
-        urgent_negative=[
-            "water is flooding the room from a broken pipe",
-            "there has been no water since yesterday",
-            "the ceiling is leaking water heavily",
-            "the bathroom floor is flooded and unsafe",
-            "a pipe burst near the hallway",
-            "water is entering the electrical outlet area",
+        "negative_medium": [
+            "The water pressure is weak",
+            "The drain is clogged",
+            "The faucet is dripping",
+            "The shower pressure is low",
+            "The water smells strange",
         ],
-    ),
-    "internet": TopicSet(
-        low_positive=[
-            "the Wi-Fi is much better after the router reset",
-            "thank you for upgrading the internet speed",
-            "the connection is stable now",
-            "the new router location improved the signal",
-            "the internet issue was fixed quickly",
-            "the Wi-Fi password update was clear",
+        "negative_high": [
+            "The pipe is leaking",
+            "The bathroom has no water",
+            "The drain is fully blocked",
+            "The water is dirty",
+            "The shower is broken",
+            "The sink pipe is leaking",
         ],
-        medium_neutral=[
-            "I want to ask about the Wi-Fi password",
-            "I want to ask about the internet speed plan",
-            "the connection drops during video calls",
-            "the router light keeps blinking",
-            "my laptop cannot connect to the network sometimes",
-            "the signal is weak near my bed",
+        "negative_urgent": [
+            "The room is flooding",
+            "A pipe burst inside",
+            "There is no water all day",
+            "The ceiling is leaking water",
+            "Water is flooding the hallway",
+            "The bathroom floor is flooded",
         ],
-        medium_negative=[
-            "the Wi-Fi keeps disconnecting every few minutes",
-            "the Wi-Fi is slow again tonight",
-            "the wifi is slow again at night",
-            "the internet is too slow to study online",
-            "the router often stops responding",
-            "the network is unstable at night",
-            "the connection drops whenever many tenants are online",
-            "the signal is poor in my room",
+    },
+    "internet": {
+        "positive": [
+            "The Wi-Fi works very well",
+            "The internet is fast",
+            "The router works properly",
+            "The network is stable",
+            "The signal is strong",
+            "The connection is reliable",
+            "The Wi-Fi speed improved",
+            "The router setup is clear",
         ],
-        high_negative=[
-            "there has been no internet for the whole day",
-            "the router is not working after several restarts",
-            "I cannot work because the internet has been down for hours",
-            "the network outage has lasted since last night",
-            "all devices in my room cannot connect",
-            "the internet fails during every online meeting",
+        "neutral_low": [
+            "I need the Wi-Fi password",
+            "Please explain the internet plan",
+            "Can you share the network name",
+            "I have a question about Wi-Fi",
         ],
-        urgent_negative=[
-            "the internet outage is affecting an urgent online exam",
-            "I cannot contact my family during an emergency because the network is down",
-            "the router area smells burnt and the internet is down",
-            "the network equipment is sparking near the hallway",
-            "the internet cable is damaged and exposed",
-            "the shared router is overheating badly",
+        "neutral_medium": [
+            "Please check the weak signal",
+            "Can you restart the router",
+            "Please review the internet speed",
+            "Can you inspect the network",
+            "Please test the Wi-Fi connection",
+            "Can you check the router light",
         ],
-    ),
-    "security": TopicSet(
-        low_positive=[
-            "thank you for improving the gate lighting",
-            "the parking area feels safer now",
-            "the new lock works smoothly",
-            "the security reminder was helpful",
-            "the camera sign makes the entrance feel safer",
-            "the staff checked the gate quickly",
+        "negative_medium": [
+            "The Wi-Fi is very slow",
+            "The signal is weak",
+            "The connection keeps dropping",
+            "The network is unstable",
+            "The router is slow",
         ],
-        medium_neutral=[
-            "I want to ask about parking access at night",
-            "the gate sometimes stays open",
-            "the camera near the entrance points away from the door",
-            "I need a replacement key card",
-            "the parking area is crowded in the evening",
-            "the front door lock is hard to turn",
+        "negative_high": [
+            "The internet is down",
+            "The router is broken",
+            "There is no internet",
+            "The network stopped working",
+            "The Wi-Fi has no signal",
+            "The connection fails completely",
         ],
-        medium_negative=[
-            "the gate lock is loose",
-            "strangers often stand near the gate",
-            "the parking area feels unsafe at night",
-            "the camera image is unclear",
-            "the room door lock is difficult to close",
-            "people keep entering without checking in",
+        "negative_urgent": [
+            "The router is overheating",
+            "The internet cable is exposed",
+            "The router smells burnt",
+            "The network box is sparking",
+            "The cable is dangerously damaged",
+            "The router area feels unsafe",
         ],
-        high_negative=[
-            "the security camera is not working",
-            "the front gate lock is broken",
-            "someone tried to open my door last night",
-            "the parking area has no working lights",
-            "my package may have been taken from the lobby",
-            "the entrance door does not close properly",
+    },
+    "security": {
+        "positive": [
+            "The camera works properly",
+            "The gate feels secure",
+            "The lock works well",
+            "The parking area feels safe",
+            "The entrance light helps security",
+            "The guard checked quickly",
+            "The new lock is strong",
+            "The camera view is clear",
         ],
-        urgent_negative=[
-            "the door lock is broken and strangers can enter",
-            "the room door lock is broken and strangers can enter",
-            "strangers can enter because the door lock is broken",
-            "my item was stolen from the parking area",
-            "there is suspicious activity near the gate right now",
-            "someone is trying to force the entrance door",
-            "the room lock failed and I do not feel safe",
-            "unknown people are entering the building late at night",
+        "neutral_low": [
+            "I need a new gate key",
+            "Please explain the parking rule",
+            "I have a question about visitors",
+            "Can you confirm camera coverage",
         ],
-    ),
-    "cleanliness": TopicSet(
-        low_positive=[
-            "thank you for cleaning the hallway",
-            "the shared bathroom is cleaner this week",
-            "the garbage area smells better now",
-            "the new cleaning schedule is helpful",
-            "the kitchen area looks tidy after cleaning",
-            "the mold removal improved the room",
+        "neutral_medium": [
+            "Please check the gate lock",
+            "Can you inspect the camera",
+            "Please review parking safety",
+            "Can you check the entrance gate",
+            "Please inspect the room lock",
+            "Can you test the security camera",
         ],
-        medium_neutral=[
-            "I want to ask about the cleaning schedule",
-            "the hallway needs cleaning this week",
-            "the shared bathroom has a smell",
-            "garbage pickup seems delayed",
-            "there are a few insects near the kitchen",
-            "the laundry area floor is dirty",
+        "negative_medium": [
+            "The gate lock is loose",
+            "The camera view is blurry",
+            "The parking area feels unsafe",
+            "The room lock is weak",
+            "Strangers wait near the gate",
         ],
-        medium_negative=[
-            "the bathroom has a bad smell and needs cleaning",
-            "garbage smell is spreading into the hallway",
-            "there are insects near the shared kitchen",
-            "the hallway floor is dirty again",
-            "mold is appearing near the bathroom wall",
-            "the cleaning schedule is not being followed",
+        "negative_high": [
+            "The camera is broken",
+            "The gate lock is damaged",
+            "The door lock is damaged",
+            "The parking light is broken",
+            "The entrance gate stays open",
+            "The room key does not work",
         ],
-        high_negative=[
-            "there are many insects in the shared bathroom",
-            "mold is spreading across the wall",
-            "the garbage area has a strong smell for days",
-            "the shared kitchen is too dirty to use",
-            "the hallway has standing dirty water",
-            "the bathroom cleanliness is affecting tenant health",
+        "negative_urgent": [
+            "The door lock is broken",
+            "Strangers can enter the building",
+            "My item was stolen",
+            "The gate lock is broken",
+            "Someone forced the door",
+            "The parking area is dangerous",
         ],
-        urgent_negative=[
-            "sewage smell is very strong in the bathroom",
-            "there is severe mold causing breathing discomfort",
-            "many insects are coming into rooms from the drain",
-            "trash is blocking the hallway and creating a safety risk",
-            "dirty water from the bathroom is spreading outside",
-            "the shared bathroom is unusable due to hygiene concerns",
+    },
+    "cleanliness": {
+        "positive": [
+            "The room is clean and bright",
+            "The hallway smells fresh today",
+            "The bathroom is very clean",
+            "The garbage area is tidy",
+            "The kitchen is clean",
+            "The hallway is spotless",
+            "The shared bathroom looks clean",
+            "The cleaning schedule works well",
         ],
-    ),
-    "maintenance": TopicSet(
-        low_positive=[
-            "thank you for fixing the broken fan",
-            "the air conditioner works well after service",
-            "the door repair was completed quickly",
-            "the furniture replacement was helpful",
-            "the wall crack repair looks good",
-            "maintenance handled the request politely",
+        "neutral_low": [
+            "Please share the cleaning schedule",
+            "I have a question about cleaning",
+            "Can you confirm garbage pickup",
+            "Please explain bathroom cleaning times",
         ],
-        medium_neutral=[
-            "I want to request a fan inspection",
-            "the door hinge makes noise",
-            "the chair in my room is loose",
-            "the air conditioner filter may need cleaning",
-            "there is a small crack on the wall",
-            "the ceiling has a small stain",
+        "neutral_medium": [
+            "Please clean the hallway",
+            "Can you check the bathroom smell",
+            "Please inspect the garbage area",
+            "Can you remove the insects",
+            "Please review the cleaning schedule",
+            "Can you clean the shared bathroom",
         ],
-        medium_negative=[
-            "the fan is noisy and shakes",
-            "the door does not close smoothly",
-            "the bed frame is damaged",
-            "the air conditioner is not cold enough",
-            "the wall crack is getting longer",
-            "the wardrobe door is broken",
+        "negative_medium": [
+            "The hallway is dirty",
+            "The bathroom smells bad",
+            "The garbage smell is strong",
+            "There are insects inside",
+            "The kitchen floor is dirty",
         ],
-        high_negative=[
-            "the air conditioner is broken and the room is too hot",
-            "the ceiling leak is getting worse",
-            "the door cannot be locked properly",
-            "the furniture is damaged and unsafe",
-            "the fan stopped working completely",
-            "water from the ceiling is damaging the bed",
+        "negative_high": [
+            "The bathroom is unusable",
+            "Mold is spreading",
+            "The garbage area is overflowing",
+            "The hallway smells terrible",
+            "The shared bathroom is filthy",
+            "Many insects are inside",
         ],
-        urgent_negative=[
-            "part of the ceiling looks like it may fall",
-            "water is leaking through the ceiling near electrical items",
-            "the door is stuck and I cannot leave the room easily",
-            "the broken fan is overheating",
-            "a large crack appeared in the wall suddenly",
-            "the bed frame collapsed and caused an injury risk",
+        "negative_urgent": [
+            "The bathroom has sewage smell",
+            "Mold is causing breathing problems",
+            "Trash blocks the hallway",
+            "Dirty water covers the bathroom",
+            "Insects are entering rooms",
+            "The toilet area is unsafe",
         ],
-    ),
-    "billing": TopicSet(
-        low_positive=[
-            "thank you for explaining the rent invoice clearly",
-            "the deposit information was helpful",
-            "the payment receipt arrived quickly",
-            "the billing reminder was clear",
-            "the invoice format is easier to understand now",
-            "the rent payment confirmation was fast",
+    },
+    "maintenance": {
+        "positive": [
+            "The air conditioner works well",
+            "The fan works properly",
+            "The door repair looks good",
+            "The wall looks fixed",
+            "The ceiling repair helped",
+            "The furniture is comfortable",
+            "The window opens smoothly",
+            "The room repair was quick",
         ],
-        medium_neutral=[
-            "I have a question about my rent invoice",
-            "I want to ask about my deposit refund",
-            "please explain the electricity charge",
-            "I need a copy of my payment receipt",
-            "I want to confirm the payment due date",
-            "there is a late fee line I do not understand",
+        "neutral_low": [
+            "Can you inspect the room fan",
+            "Please check the door hinge",
+            "I need furniture information",
+            "Can you inspect the window",
         ],
-        medium_negative=[
-            "the invoice amount looks incorrect",
-            "the electricity charge is unclear",
-            "I may have been charged a duplicate fee",
-            "the rent payment status has not updated",
-            "the water charge seems higher than expected",
-            "the deposit deduction is not clear",
+        "neutral_medium": [
+            "Please check the noisy fan",
+            "Can you inspect the damaged wall",
+            "Please review the ceiling stain",
+            "Can you check the room door",
+            "Please inspect the window frame",
+            "Can you check the furniture",
         ],
-        high_negative=[
-            "there is a large billing error on my invoice",
-            "I was charged twice for rent",
-            "my deposit refund amount is much lower than expected",
-            "the invoice includes fees I did not use",
-            "the late fee was added even though I paid on time",
-            "the electricity charge is much higher than the meter reading",
+        "negative_medium": [
+            "The fan is noisy",
+            "The door is hard to close",
+            "The wall has cracks",
+            "The window is stuck",
+            "The furniture is loose",
         ],
-        urgent_negative=[
-            "my account shows unpaid even after payment and I may lose access",
-            "a serious duplicate rent charge needs immediate correction",
-            "the invoice error may affect my contract renewal today",
-            "I received an urgent late fee notice for a paid invoice",
-            "the payment system marked my rent as missing incorrectly",
-            "the deposit issue is blocking my move-out process today",
+        "negative_high": [
+            "The air conditioner is broken",
+            "The ceiling is leaking",
+            "The door is damaged",
+            "The fan stopped working",
+            "The furniture is broken",
+            "The window glass is cracked",
         ],
-    ),
-    "other": TopicSet(
-        low_positive=[
-            "thank you for helping with package delivery",
-            "the move-out information was useful",
-            "the parking arrangement worked well",
-            "the owner answered my general question quickly",
-            "the roommate guidance was helpful",
-            "the quiet hours reminder improved the building",
+        "negative_urgent": [
+            "The ceiling may collapse",
+            "The fan is overheating",
+            "The door is stuck shut",
+            "The wall crack is dangerous",
+            "The bed frame collapsed",
+            "The ceiling leak reaches wires",
         ],
-        medium_neutral=[
-            "I want to ask about parking availability",
-            "I have a question about moving out",
-            "a package was delivered for me",
-            "I want to discuss a roommate issue",
-            "please confirm the visitor policy",
-            "I need general information about the boarding house",
+    },
+    "billing": {
+        "positive": [
+            "The invoice is clear",
+            "The invoice is clear and correct",
+            "The rent receipt arrived quickly",
+            "The payment record is correct",
+            "The deposit details are clear",
+            "The fee explanation is helpful",
+            "The bill is easy to read",
+            "The charge is correct",
         ],
-        medium_negative=[
-            "there is too much noise after quiet hours",
-            "my roommate keeps leaving shared items outside",
-            "parking spaces are often blocked",
-            "my package delivery was misplaced",
-            "the move-out process is unclear",
-            "visitors are making noise late at night",
+        "neutral_low": [
+            "I have a question about my invoice",
+            "Please explain the rent payment",
+            "Can you confirm my deposit",
+            "I need a payment receipt",
         ],
-        high_negative=[
-            "the noise complaint has continued for several nights",
-            "a roommate conflict is affecting my safety",
-            "my package with valuable items is missing",
-            "parking access is blocked every evening",
-            "the move-out issue needs urgent owner review",
-            "repeated noise is preventing me from sleeping",
+        "neutral_medium": [
+            "Please review the unclear invoice",
+            "Can you check the rent charge",
+            "Please explain the late fee",
+            "Can you review the water charge",
+            "Please check the payment status",
+            "Can you explain this bill",
         ],
-        urgent_negative=[
-            "a roommate conflict is becoming unsafe",
-            "there is a serious disturbance happening right now",
-            "someone is blocking the emergency exit with parked vehicles",
-            "a visitor is threatening tenants in the hallway",
-            "my important package may have been stolen",
-            "noise and shouting are creating a safety concern tonight",
+        "negative_medium": [
+            "The invoice is unclear",
+            "The rent charge seems wrong",
+            "The late fee is confusing",
+            "The bill has an extra fee",
+            "The payment status is wrong",
         ],
-    ),
+        "negative_high": [
+            "The invoice is incorrect",
+            "The rent was charged twice",
+            "The deposit amount is wrong",
+            "The bill has a large error",
+            "The payment was not recorded",
+            "The fee was added incorrectly",
+        ],
+        "negative_urgent": [
+            "The paid rent shows unpaid",
+            "The duplicate rent charge is urgent",
+            "The deposit issue blocks move out",
+            "The payment error affects renewal",
+            "The late fee notice is wrong",
+            "The invoice error needs immediate review",
+        ],
+    },
+    "other": {
+        "positive": [
+            "The room is very beautiful",
+            "The room is comfortable",
+            "The room looks great",
+            "The room is quiet and nice",
+            "The parking area is convenient",
+            "The package service is helpful",
+            "The move out guide is clear",
+            "The roommate rule is fair",
+        ],
+        "neutral_low": [
+            "I need information about parking",
+            "I have a general question",
+            "Please confirm package pickup",
+            "Can you explain move out steps",
+        ],
+        "neutral_medium": [
+            "Please check the parking space",
+            "Can you review the noise issue",
+            "Please confirm roommate rules",
+            "Can you check package delivery",
+            "Please explain move out timing",
+            "Can you answer my general question",
+        ],
+        "negative_medium": [
+            "The noise is disturbing",
+            "The parking space is blocked",
+            "My package is missing",
+            "The roommate issue continues",
+            "The move out process is unclear",
+        ],
+        "negative_high": [
+            "The noise continues every night",
+            "The parking gate is blocked",
+            "My important package is missing",
+            "The roommate conflict is serious",
+            "Move out information is missing",
+            "The general complaint was ignored",
+        ],
+        "negative_urgent": [
+            "A roommate conflict feels unsafe",
+            "A stranger is shouting inside",
+            "A car blocks the emergency exit",
+            "My valuable package was stolen",
+            "The noise sounds dangerous",
+            "The hallway disturbance is unsafe",
+        ],
+    },
 }
 
 
-def build_label_plan() -> list[tuple[str, str]]:
-    labels: list[tuple[str, str]] = []
-    for sentiment, priority, count in LABEL_PLAN:
-        labels.extend([(sentiment, priority)] * count)
-    return labels
+def normalize(text: str) -> str:
+    return re.sub(r"\s+", " ", text.strip().lower())
 
 
-def topic_for(category: str, sentiment: str, priority: str, row_index: int) -> str:
-    topic_set = TOPICS[category]
-    if sentiment == "positive":
-        topics = topic_set.low_positive
-    elif priority == "urgent":
-        topics = topic_set.urgent_negative
-    elif priority == "high":
-        topics = topic_set.high_negative
-    elif sentiment == "negative":
-        topics = topic_set.medium_negative
-    else:
-        topics = topic_set.medium_neutral
-
-    return topics[row_index % len(topics)]
+def word_count(text: str) -> int:
+    return len(re.findall(r"\b[\w'-]+\b", text))
 
 
-def render_content(
+def punctuate(text: str) -> str:
+    return text if text.endswith((".", "?", "!")) else f"{text}."
+
+
+def make_sentence(base: str, context: str | None) -> str:
+    if context:
+        return punctuate(f"{base} {context}")
+    return punctuate(base)
+
+
+def generate_bucket(
     category: str,
     sentiment: str,
     priority: str,
-    row_index: int,
-    rng: random.Random,
-) -> str:
-    topic = topic_for(category, sentiment, priority, row_index)
-    room = ROOMS[row_index % len(ROOMS)]
-    location = LOCATIONS[(row_index + len(category)) % len(LOCATIONS)]
-    time_text = TIMES[(row_index * 3) % len(TIMES)]
-    request = REQUESTS[(row_index * 5) % len(REQUESTS)]
-    reference = f"Room {room}"
+    count: int,
+    used: set[str],
+) -> list[dict[str, str]]:
+    key = {
+        ("positive", "low"): "positive",
+        ("neutral", "low"): "neutral_low",
+        ("neutral", "medium"): "neutral_medium",
+        ("negative", "medium"): "negative_medium",
+        ("negative", "high"): "negative_high",
+        ("negative", "urgent"): "negative_urgent",
+    }[(sentiment, priority)]
+    phrases = DATA[category][key]
+    rows: list[dict[str, str]] = []
 
-    short_templates = [
-        f"{topic.capitalize()} in {reference}.",
-        f"{reference}: {topic}.",
-        f"Please note that {topic} in {location}.",
-    ]
-    medium_templates = [
-        f"{topic.capitalize()} in {reference} {time_text}. {request}",
-        f"I noticed that {topic} around {location} {time_text}. {request}",
-        f"{reference} has an issue: {topic}. It happens {time_text}.",
-    ]
-    long_templates = [
-        (
-            f"I am reporting this from {reference}. {topic.capitalize()} in "
-            f"{location} {time_text}. It is affecting daily living, so {request.lower()}"
-        ),
-        (
-            f"Hello, {topic} near {location} {time_text}. I checked again before "
-            f"sending this message, and the problem is still present. {request}"
-        ),
-        (
-            f"This is a follow-up for {reference}. {topic.capitalize()} {time_text}, "
-            f"and it is becoming difficult to manage. {request}"
-        ),
-    ]
+    for phrase in phrases:
+        candidate = make_sentence(phrase, None)
+        normalized = normalize(candidate)
+        if normalized not in used and 5 <= word_count(candidate) <= 16:
+            rows.append(
+                {
+                    "content": candidate,
+                    "sentiment": sentiment,
+                    "category": category,
+                    "priority": priority,
+                }
+            )
+            used.add(normalized)
+            if len(rows) == count:
+                return rows
 
-    if sentiment == "positive":
-        templates = [
-            f"{topic.capitalize()}. I appreciate the quick support for {reference}.",
-            f"Thank you, {topic}. The service has been helpful for tenants.",
-            f"{reference}: {topic}. I am satisfied with the response.",
-        ]
-    elif priority == "urgent":
-        templates = [
-            f"Urgent: {topic} in {reference} {time_text}. Please handle this immediately.",
-            f"{topic.capitalize()} near {location}. I do not feel safe and need urgent help.",
-            f"Emergency report from {reference}: {topic}. Please respond as soon as possible.",
-        ]
-    else:
-        templates = short_templates + medium_templates + long_templates
+    for context in CONTEXTS:
+        for phrase in phrases:
+            candidate = make_sentence(phrase, context)
+            normalized = normalize(candidate)
+            if normalized in used:
+                continue
+            if not 5 <= word_count(candidate) <= 16:
+                continue
 
-    content = templates[rng.randrange(len(templates))]
-    return f"{content} Tenant note {row_index:04d}."
+            rows.append(
+                {
+                    "content": candidate,
+                    "sentiment": sentiment,
+                    "category": category,
+                    "priority": priority,
+                }
+            )
+            used.add(normalized)
+            if len(rows) == count:
+                return rows
+
+    raise RuntimeError(
+        f"Unable to generate {count} unique rows for {category} {sentiment} {priority}."
+    )
 
 
 def generate_rows() -> list[dict[str, str]]:
-    rng = random.Random(RANDOM_STATE)
-    labels = build_label_plan()
-    rng.shuffle(labels)
-
-    categories: list[str] = []
-    for category, count in CATEGORY_COUNTS.items():
-        categories.extend([category] * count)
-    rng.shuffle(categories)
-
+    used: set[str] = set()
     rows: list[dict[str, str]] = []
-    for row_index, (category, (sentiment, priority)) in enumerate(
-        zip(categories, labels, strict=True),
-        start=1,
-    ):
-        rows.append(
-            {
-                "content": render_content(category, sentiment, priority, row_index, rng),
-                "sentiment": sentiment,
-                "category": category,
-                "priority": priority,
-            }
-        )
 
-    apply_anchor_examples(rows)
-    rng.shuffle(rows)
+    for category in CATEGORIES:
+        category_rows: list[dict[str, str]] = []
+        for sentiment, priority, count in LABEL_QUOTAS:
+            category_rows.extend(
+                generate_bucket(category, sentiment, priority, count, used)
+            )
+
+        if len(category_rows) != CATEGORY_QUOTA:
+            raise RuntimeError(f"{category} generated {len(category_rows)} rows.")
+        rows.extend(category_rows)
+
+    apply_exact_anchors(rows)
+
+    if len(rows) != 1200:
+        raise RuntimeError(f"Expected 1200 rows, generated {len(rows)} rows.")
+
+    normalized_rows = [normalize(row["content"]) for row in rows]
+    if len(normalized_rows) != len(set(normalized_rows)):
+        raise RuntimeError("Duplicate content found before saving.")
+
+    random.shuffle(rows)
     return rows
 
 
-def apply_anchor_examples(rows: list[dict[str, str]]) -> None:
+def apply_exact_anchors(rows: list[dict[str, str]]) -> None:
     used_indexes: set[int] = set()
-    for anchor in ANCHOR_EXAMPLES:
-        replacements = 0
+    for content, sentiment, category, priority in EXACT_ANCHORS:
+        normalized_content = normalize(content)
+        existing_index = next(
+            (
+                index
+                for index, row in enumerate(rows)
+                if normalize(row["content"]) == normalized_content
+                and row["sentiment"] == sentiment
+                and row["category"] == category
+                and row["priority"] == priority
+            ),
+            None,
+        )
+        if existing_index is not None:
+            used_indexes.add(existing_index)
+            continue
+
         for index, row in enumerate(rows):
             if index in used_indexes:
                 continue
             if (
-                row["sentiment"] == anchor["sentiment"]
-                and row["category"] == anchor["category"]
-                and row["priority"] == anchor["priority"]
+                row["sentiment"] == sentiment
+                and row["category"] == category
+                and row["priority"] == priority
             ):
-                row["content"] = str(anchor["content"])
+                row["content"] = content
                 used_indexes.add(index)
-                replacements += 1
-                if replacements >= int(anchor["count"]):
-                    break
-
-        if replacements < int(anchor["count"]):
-            raise RuntimeError(
-                f"Unable to place {anchor['count']} anchor examples for {anchor['content']}"
-            )
+                break
+        else:
+            raise RuntimeError(f"Unable to add exact anchor: {content}")
 
 
 def main() -> None:
@@ -592,7 +647,7 @@ def main() -> None:
         writer.writeheader()
         writer.writerows(rows)
 
-    print(f"Generated {len(rows)} feedback rows.")
+    print(f"Generated {len(rows)} clean feedback rows.")
     print(f"Saved dataset to {DATASET_PATH}")
 
 
