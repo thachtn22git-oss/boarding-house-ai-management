@@ -43,6 +43,12 @@ type StatusFilter = 'all' | FeedbackStatus
 type PriorityFilter = 'all' | FeedbackPriority
 type SentimentFilter = 'all' | SentimentLabel
 
+function getAiPriorityLabel(feedback: Feedback) {
+  const priority = feedback.priority ?? feedback.aiSuggestedPriority
+
+  return priority ? getPriorityLabel(priority) : 'Pending AI'
+}
+
 function FeedbackManagementPage() {
   const { currentUser } = useAuth()
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([])
@@ -75,12 +81,14 @@ function FeedbackManagementPage() {
 
   const filteredFeedbacks = useMemo(() => {
     return ownerFeedbacks.filter((feedback) => {
+      const effectiveCategory = feedback.aiSuggestedCategory ?? feedback.category
+      const effectivePriority = feedback.priority ?? feedback.aiSuggestedPriority
       const matchesCategory =
-        categoryFilter === 'all' || feedback.category === categoryFilter
+        categoryFilter === 'all' || effectiveCategory === categoryFilter
       const matchesStatus =
         statusFilter === 'all' || feedback.status === statusFilter
       const matchesPriority =
-        priorityFilter === 'all' || feedback.priority === priorityFilter
+        priorityFilter === 'all' || effectivePriority === priorityFilter
       const matchesSentiment =
         sentimentFilter === 'all' || feedback.sentiment === sentimentFilter
 
@@ -418,24 +426,30 @@ function FeedbackManagementPage() {
                       <td>{tenant?.fullName ?? '-'}</td>
                       <td>{room ? `${room.roomNumber} - ${room.roomType}` : '-'}</td>
                       <td>
-                        <span
-                          className={`status-badge feedback-category-badge--${feedback.category}`}
-                        >
-                          {getCategoryLabel(feedback.category)}
-                        </span>
-                        {feedback.category === 'other' &&
-                        feedback.aiSuggestedCategory ? (
-                          <span className="feedback-ai-suggestion">
-                            Suggested: {getCategoryLabel(feedback.aiSuggestedCategory)}
+                        {feedback.aiSuggestedCategory ? (
+                          <span
+                            className={`status-badge feedback-category-badge--${feedback.aiSuggestedCategory}`}
+                          >
+                            {getCategoryLabel(feedback.aiSuggestedCategory)}
                           </span>
-                        ) : null}
+                        ) : feedback.category && feedback.category !== 'other' ? (
+                          <span
+                            className={`status-badge feedback-category-badge--${feedback.category}`}
+                          >
+                            {getCategoryLabel(feedback.category)}
+                          </span>
+                        ) : (
+                          <span className="status-badge feedback-ai-pending-badge">
+                            Pending AI
+                          </span>
+                        )}
                       </td>
                       <td>
-                        {feedback.priority ? (
+                        {feedback.priority || feedback.aiSuggestedPriority ? (
                           <span
-                            className={`status-badge feedback-priority-badge--${feedback.priority}`}
+                            className={`status-badge feedback-priority-badge--${feedback.priority ?? feedback.aiSuggestedPriority}`}
                           >
-                            {getPriorityLabel(feedback.priority)}
+                            {getAiPriorityLabel(feedback)}
                           </span>
                         ) : (
                           <span className="status-badge feedback-ai-pending-badge">

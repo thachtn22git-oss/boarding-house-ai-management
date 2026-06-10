@@ -431,7 +431,7 @@ export async function createTenantFeedback(
     roomId: tenant.roomId || null,
     title: values.title,
     content: values.content,
-    category: values.category || 'other',
+    category: 'other',
     priority: null,
     sentiment: null,
     status: 'new',

@@ -13,7 +13,7 @@ import {
   type TenantPortalData,
 } from '../../services/tenantPortal.service'
 import { formatCurrency, formatDate } from '../../utils/format'
-import type { Feedback, FeedbackCategory, Invoice, UtilityReading } from '../../types/models'
+import type { Feedback, Invoice, UtilityReading } from '../../types/models'
 
 function useTenantPortalData() {
   const { currentUser } = useAuth()
@@ -166,7 +166,6 @@ export function MyFeedbackScreen() {
   const { data, loading, error, reload } = useTenantPortalData()
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
-  const [category, setCategory] = useState<FeedbackCategory | ''>('')
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -191,7 +190,6 @@ export function MyFeedbackScreen() {
     const values: TenantFeedbackValues = {
       title: title.trim(),
       content: content.trim(),
-      category: category || 'other',
     }
 
     setSubmitting(true)
@@ -199,7 +197,6 @@ export function MyFeedbackScreen() {
       await createTenantFeedback(data.tenant, values)
       setTitle('')
       setContent('')
-      setCategory('')
       await reload()
     } catch (submitError) {
       console.warn('Tenant feedback creation failed.', submitError)
@@ -210,7 +207,7 @@ export function MyFeedbackScreen() {
   }
 
   return (
-    <Screen loading={loading} onRefresh={reload} refreshing={loading} subtitle="Describe your issue and AI will help classify it." title="Submit Feedback">
+    <Screen loading={loading} onRefresh={reload} refreshing={loading} subtitle="Describe your issue and AI will classify it automatically." title="Submit Feedback">
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <ListCard title="Submit Feedback">
         <TextInput placeholder="Title" placeholderTextColor={colors.muted} style={styles.input} value={title} onChangeText={setTitle} />
@@ -222,12 +219,6 @@ export function MyFeedbackScreen() {
           value={content}
           onChangeText={setContent}
         />
-        <OptionRow
-          label="Category"
-          options={['other', 'electricity', 'water', 'internet', 'security', 'cleanliness', 'maintenance', 'billing']}
-          value={category || 'other'}
-          onChange={(value) => setCategory(value === 'other' ? '' : (value as FeedbackCategory))}
-        />
         {formError ? <Text style={styles.error}>{formError}</Text> : null}
         <PrimaryButton disabled={submitting} label={submitting ? 'Submitting...' : 'Submit Feedback'} onPress={submitFeedback} />
       </ListCard>
@@ -235,8 +226,8 @@ export function MyFeedbackScreen() {
       {!data?.feedbacks.length ? <Text style={styles.empty}>No feedback found.</Text> : null}
       {data?.feedbacks.map((feedback) => (
         <ListCard key={feedback.id} title={feedback.title} subtitle={formatDate(feedback.createdAt)}>
-          <Text style={styles.meta}>Category: {feedback.category}</Text>
-          <Text style={styles.meta}>AI Priority: {feedback.priority ?? 'Pending AI'}</Text>
+          <Text style={styles.meta}>Category: {formatAiCategory(feedback)}</Text>
+          <Text style={styles.meta}>AI Priority: {formatAiPriority(feedback)}</Text>
           <Text style={styles.meta}>AI Sentiment: {feedback.sentiment ?? 'Pending AI'}</Text>
           <Text style={styles.meta}>Status: {feedback.status}</Text>
           <Text style={styles.meta}>Owner Response: {feedback.ownerResponse ?? 'Not available'}</Text>
@@ -314,10 +305,11 @@ function showFeedbackDetails(feedback: Feedback) {
     feedback.title,
     [
       feedback.content,
-      `Category: ${feedback.category}`,
       'AI Analysis',
-      `Priority: ${feedback.priority ?? 'Pending AI'}`,
+      `Category: ${formatAiCategory(feedback)}`,
+      `Priority: ${formatAiPriority(feedback)}`,
       `Sentiment: ${feedback.sentiment ?? 'Pending AI'}`,
+      `AI Generated: ${feedback.aiGenerated ? 'Yes' : 'No'}`,
       `Status: ${feedback.status}`,
       `Owner Response: ${feedback.ownerResponse ?? 'Not available'}`,
       `AI Summary: ${feedback.aiSummary ?? 'AI summary will be generated after analysis.'}`,
@@ -325,29 +317,22 @@ function showFeedbackDetails(feedback: Feedback) {
   )
 }
 
-interface OptionRowProps {
-  label: string
-  options: string[]
-  value: string
-  onChange: (value: string) => void
+function formatAiCategory(feedback: Feedback) {
+  if (feedback.aiSuggestedCategory) {
+    return capitalize(feedback.aiSuggestedCategory.replace('_', ' '))
+  }
+
+  if (feedback.category && feedback.category !== 'other') {
+    return capitalize(feedback.category.replace('_', ' '))
+  }
+
+  return 'Pending AI'
 }
 
-function OptionRow({ label, options, value, onChange }: OptionRowProps) {
-  return (
-    <View style={styles.optionGroup}>
-      <Text style={styles.optionLabel}>{label}</Text>
-      <View style={styles.optionWrap}>
-        {options.map((option) => (
-          <PrimaryButton
-            key={option}
-            label={capitalize(option.replace('_', ' '))}
-            onPress={() => onChange(option)}
-            variant={option === value ? 'primary' : 'secondary'}
-          />
-        ))}
-      </View>
-    </View>
-  )
+function formatAiPriority(feedback: Feedback) {
+  const priority = feedback.priority ?? feedback.aiSuggestedPriority
+
+  return priority ? capitalize(priority.replace('_', ' ')) : 'Pending AI'
 }
 
 function capitalize(value: string) {

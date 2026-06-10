@@ -21,12 +21,16 @@ function FeedbackViewModal({
   room,
   onClose,
 }: FeedbackViewModalProps) {
+  const categoryLabel = feedback.aiSuggestedCategory
+    ? getCategoryLabel(feedback.aiSuggestedCategory)
+    : feedback.category && feedback.category !== 'other'
+      ? getCategoryLabel(feedback.category)
+      : 'Pending AI'
   const sentimentLabel = feedback.sentiment
     ? getSentimentLabel(feedback.sentiment)
-    : 'Pending AI Analysis'
-  const priorityLabel = feedback.priority
-    ? getPriorityLabel(feedback.priority)
-    : 'Pending AI Analysis'
+    : 'Pending AI'
+  const priorityValue = feedback.priority ?? feedback.aiSuggestedPriority
+  const priorityLabel = priorityValue ? getPriorityLabel(priorityValue) : 'Pending AI'
 
   return (
     <div className="room-modal-backdrop" role="presentation">
@@ -70,10 +74,6 @@ function FeedbackViewModal({
               <dd>{room ? `${room.roomNumber} - ${room.roomType}` : 'No room linked'}</dd>
             </div>
             <div>
-              <dt>Category</dt>
-              <dd>{getCategoryLabel(feedback.category)}</dd>
-            </div>
-            <div>
               <dt>Status</dt>
               <dd>{getStatusLabel(feedback.status)}</dd>
             </div>
@@ -87,15 +87,7 @@ function FeedbackViewModal({
             </div>
             <div>
               <dt>Category</dt>
-              <dd>
-                {getCategoryLabel(feedback.category)}
-                {feedback.aiSuggestedCategory ? (
-                  <>
-                    <br />
-                    Suggested: {getCategoryLabel(feedback.aiSuggestedCategory)}
-                  </>
-                ) : null}
-              </dd>
+              <dd>{categoryLabel}</dd>
             </div>
             <div>
               <dt>Priority</dt>

@@ -483,8 +483,8 @@ export function FeedbackScreen() {
       renderItem={(feedback, reload) => (
         <View style={styles.item}>
           <Text style={styles.itemTitle}>{feedback.title}</Text>
-          <Text style={styles.meta}>Category: {formatLabel(feedback.category)}</Text>
-          <Text style={styles.meta}>AI Priority: {formatAiLabel(feedback.priority)}</Text>
+          <Text style={styles.meta}>Category: {formatAiCategory(feedback)}</Text>
+          <Text style={styles.meta}>AI Priority: {formatAiPriority(feedback)}</Text>
           <Text style={styles.meta}>AI Sentiment: {formatAiLabel(feedback.sentiment)}</Text>
           <StatusBadge label={formatLabel(feedback.status)} tone={statusTone(feedback.status)} />
           <View style={styles.actions}>
@@ -496,8 +496,8 @@ export function FeedbackScreen() {
                   feedback.ownerResponse ? `\nOwner Response: ${feedback.ownerResponse}` : '',
                   '\nAI Analysis',
                   `Sentiment: ${formatAiLabel(feedback.sentiment)}`,
-                  `Category: ${formatLabel(feedback.category)}`,
-                  `Priority: ${formatAiLabel(feedback.priority)}`,
+                  `Category: ${formatAiCategory(feedback)}`,
+                  `Priority: ${formatAiPriority(feedback)}`,
                   `Summary: ${feedback.aiSummary ?? 'AI summary will be generated after analysis.'}`,
                 ].join(''))
               }
@@ -917,6 +917,22 @@ function formatLabel(value?: string) {
 
 function formatAiLabel(value?: string | null) {
   return value ? formatLabel(value) : 'Pending AI'
+}
+
+function formatAiCategory(feedback: Feedback) {
+  if (feedback.aiSuggestedCategory) {
+    return formatLabel(feedback.aiSuggestedCategory)
+  }
+
+  if (feedback.category && feedback.category !== 'other') {
+    return formatLabel(feedback.category)
+  }
+
+  return 'Pending AI'
+}
+
+function formatAiPriority(feedback: Feedback) {
+  return formatAiLabel(feedback.priority ?? feedback.aiSuggestedPriority)
 }
 
 function capitalize(value: string) {

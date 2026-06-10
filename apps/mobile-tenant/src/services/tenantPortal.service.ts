@@ -13,7 +13,6 @@ import { db } from '../config/firebase'
 import type {
   Contract,
   Feedback,
-  FeedbackCategory,
   Invoice,
   Room,
   Tenant,
@@ -36,7 +35,6 @@ export interface TenantPortalData {
 export interface TenantFeedbackValues {
   title: string
   content: string
-  category?: FeedbackCategory
 }
 
 function mapDoc<T>(item: { id: string; data: () => Record<string, unknown> }) {
@@ -96,7 +94,7 @@ export async function createTenantFeedback(tenant: Tenant, values: TenantFeedbac
     roomId: tenant.roomId,
     title: values.title,
     content: values.content,
-    category: values.category || 'other',
+    category: 'other',
     priority: null,
     sentiment: null,
     status: 'new',

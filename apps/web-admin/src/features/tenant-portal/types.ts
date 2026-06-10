@@ -1,8 +1,5 @@
 import type { Contract } from '../contracts/types'
-import type {
-  FeedbackCategory,
-  Feedback,
-} from '../feedbacks/types'
+import type { Feedback } from '../feedbacks/types'
 import type { Invoice } from '../invoices/types'
 import type { Room } from '../rooms/types'
 import type { Tenant } from '../tenants/types'
@@ -20,5 +17,4 @@ export type TenantPortalData = {
 export type TenantFeedbackFormValues = {
   title: string
   content: string
-  category?: FeedbackCategory
 }

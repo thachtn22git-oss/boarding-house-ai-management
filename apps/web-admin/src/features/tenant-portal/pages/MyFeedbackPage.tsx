@@ -1,40 +1,40 @@
 import { useState, type FormEvent } from 'react'
 
 import { formatDate } from '../../../utils/format'
-import type {
-  Feedback,
-  FeedbackCategory,
-} from '../../feedbacks/types'
+import type { Feedback } from '../../feedbacks/types'
 import TenantPortalStateView from './TenantPortalStateView'
 import { formatLabel } from './tenantPortalFormatting'
 import { useTenantPortalData } from './useTenantPortalData'
 import './TenantPortal.css'
 
-const categoryOptions: FeedbackCategory[] = [
-  'electricity',
-  'water',
-  'internet',
-  'security',
-  'cleanliness',
-  'maintenance',
-  'billing',
-  'other',
-]
-
 type FeedbackFormState = {
   title: string
   content: string
-  category: FeedbackCategory | ''
 }
 
 const initialFeedbackForm: FeedbackFormState = {
   title: '',
   content: '',
-  category: '',
 }
 
 function formatAiValue(value: string | null | undefined) {
   return value ? formatLabel(value) : 'Pending AI'
+}
+
+function getAiCategoryLabel(feedback: Feedback) {
+  if (feedback.aiSuggestedCategory) {
+    return formatLabel(feedback.aiSuggestedCategory)
+  }
+
+  if (feedback.category && feedback.category !== 'other') {
+    return formatLabel(feedback.category)
+  }
+
+  return 'Pending AI'
+}
+
+function getAiPriorityLabel(feedback: Feedback) {
+  return formatAiValue(feedback.priority ?? feedback.aiSuggestedPriority)
 }
 
 function TenantFeedbackViewModal({
@@ -74,44 +74,36 @@ function TenantFeedbackViewModal({
               <dd>{feedback.content}</dd>
             </div>
             <div>
-              <dt>Category</dt>
-              <dd>{formatLabel(feedback.category)}</dd>
-            </div>
-            <div>
-              <dt>AI Priority</dt>
-              <dd>{formatAiValue(feedback.priority)}</dd>
-            </div>
-            <div>
               <dt>Status</dt>
               <dd>{formatLabel(feedback.status)}</dd>
             </div>
+            <div className="tenant-detail-long">
+              <dt>AI Analysis</dt>
+              <dd>AI-generated classification details for this feedback.</dd>
+            </div>
             <div>
-              <dt>AI Sentiment</dt>
+              <dt>Category</dt>
+              <dd>{getAiCategoryLabel(feedback)}</dd>
+            </div>
+            <div>
+              <dt>Sentiment</dt>
               <dd>{formatAiValue(feedback.sentiment)}</dd>
+            </div>
+            <div>
+              <dt>Priority</dt>
+              <dd>{getAiPriorityLabel(feedback)}</dd>
+            </div>
+            <div className="tenant-detail-long">
+              <dt>Summary</dt>
+              <dd>{feedback.aiSummary || 'AI summary will be generated after analysis.'}</dd>
+            </div>
+            <div>
+              <dt>AI Generated</dt>
+              <dd>{feedback.aiGenerated ? 'Yes' : 'No'}</dd>
             </div>
             <div>
               <dt>Created Date</dt>
               <dd>{formatDate(feedback.createdAt)}</dd>
-            </div>
-            <div className="tenant-detail-long">
-              <dt>AI Summary</dt>
-              <dd>{feedback.aiSummary || 'AI summary will be generated after analysis.'}</dd>
-            </div>
-            <div>
-              <dt>AI Suggested Category</dt>
-              <dd>
-                {feedback.aiSuggestedCategory
-                  ? formatLabel(feedback.aiSuggestedCategory)
-                  : 'Pending AI'}
-              </dd>
-            </div>
-            <div>
-              <dt>AI Suggested Priority</dt>
-              <dd>
-                {feedback.aiSuggestedPriority
-                  ? formatLabel(feedback.aiSuggestedPriority)
-                  : 'Pending AI'}
-              </dd>
             </div>
             <div className="tenant-detail-long">
               <dt>Owner Response</dt>
@@ -158,7 +150,6 @@ function MyFeedbackPage() {
       await submitFeedback({
         title: form.title.trim(),
         content: form.content.trim(),
-        category: form.category || 'other',
       })
       setForm(initialFeedbackForm)
     } catch {
@@ -200,7 +191,7 @@ function MyFeedbackPage() {
       <section className="dashboard-card tenant-form-card">
         <h2>Submit Feedback</h2>
         <p className="tenant-form-helper">
-          Describe your issue and AI will help classify it.
+          Describe your issue and AI will classify it automatically.
         </p>
         {formError ? <div className="room-error">{formError}</div> : null}
         <form className="tenant-feedback-form" onSubmit={handleSubmit}>
@@ -214,26 +205,6 @@ function MyFeedbackPage() {
               }
               placeholder="Enter feedback title"
             />
-          </label>
-          <label className="room-form-field">
-            <span>Category</span>
-            <select
-              value={form.category}
-              disabled={isSubmitting}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  category: event.target.value as FeedbackCategory,
-                }))
-              }
-            >
-              <option value="">Category optional</option>
-              {categoryOptions.map((category) => (
-                <option key={category} value={category}>
-                  {formatLabel(category)}
-                </option>
-              ))}
-            </select>
           </label>
           <label className="room-form-field room-form-field--full">
             <span>Description</span>
@@ -280,23 +251,28 @@ function MyFeedbackPage() {
                   <tr key={feedback.id}>
                     <td>{feedback.title}</td>
                     <td>
-                      <span
-                        className={`tenant-category-badge tenant-category-badge--${feedback.category}`}
-                      >
-                        {formatLabel(feedback.category)}
-                      </span>
-                      {feedback.category === 'other' && feedback.aiSuggestedCategory ? (
-                        <span className="tenant-ai-suggestion">
-                          Suggested: {formatLabel(feedback.aiSuggestedCategory)}
+                      {feedback.aiSuggestedCategory ? (
+                        <span
+                          className={`tenant-category-badge tenant-category-badge--${feedback.aiSuggestedCategory}`}
+                        >
+                          {formatLabel(feedback.aiSuggestedCategory)}
                         </span>
-                      ) : null}
+                      ) : feedback.category && feedback.category !== 'other' ? (
+                        <span
+                          className={`tenant-category-badge tenant-category-badge--${feedback.category}`}
+                        >
+                          {formatLabel(feedback.category)}
+                        </span>
+                      ) : (
+                        <span className="tenant-ai-pending-badge">Pending AI</span>
+                      )}
                     </td>
                     <td>
-                      {feedback.priority ? (
+                      {feedback.priority || feedback.aiSuggestedPriority ? (
                         <span
-                          className={`tenant-priority-badge tenant-priority-badge--${feedback.priority}`}
+                          className={`tenant-priority-badge tenant-priority-badge--${feedback.priority ?? feedback.aiSuggestedPriority}`}
                         >
-                          {formatLabel(feedback.priority)}
+                          {getAiPriorityLabel(feedback)}
                         </span>
                       ) : (
                         <span className="tenant-ai-pending-badge">Pending AI</span>
