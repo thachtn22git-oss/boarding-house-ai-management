@@ -8,6 +8,8 @@ Python, FastAPI, and scikit-learn. It does not call paid external AI APIs.
 - Feedback sentiment analysis
 - Feedback category classification
 - Feedback priority suggestion
+- Confidence scores for every prediction
+- Rule-free local model training from a synthetic boarding house dataset
 
 ## Setup
 
@@ -16,6 +18,32 @@ python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
 ```
+
+## Dataset
+
+The feedback dataset is synthetic and generated locally for boarding house and
+apartment rental management scenarios. It covers electricity, water, internet,
+security, cleanliness, maintenance, billing, and general tenant feedback.
+
+No external AI API is used to generate or train the models.
+
+Generate and check the dataset:
+
+```powershell
+python scripts/generate_feedback_dataset.py
+python scripts/check_feedback_dataset.py
+```
+
+The generated dataset is written to:
+
+- `datasets/feedback_dataset.csv`
+
+Columns:
+
+- `content`
+- `sentiment`
+- `category`
+- `priority`
 
 ## Train Models
 
@@ -29,10 +57,36 @@ The training script reads `datasets/feedback_dataset.csv` and writes:
 - `app/models/category_model.pkl`
 - `app/models/priority_model.pkl`
 
+Each model uses TF-IDF features and Logistic Regression. Training prints dataset
+size, label distributions, accuracy, macro F1, and weighted F1.
+
 ## Evaluate Models
 
 ```powershell
 python scripts/evaluate_feedback_models.py
+python scripts/test_feedback_predictions.py
+```
+
+Evaluation prints:
+
+- Accuracy
+- Macro F1
+- Weighted F1
+- Classification report
+- Confusion matrix
+- Manual prediction examples
+
+The prediction debug script prints labels and confidence values for manual
+boarding house feedback examples.
+
+## Full Local Workflow
+
+```powershell
+python scripts/generate_feedback_dataset.py
+python scripts/check_feedback_dataset.py
+python scripts/train_feedback_models.py
+python scripts/evaluate_feedback_models.py
+python scripts/test_feedback_predictions.py
 ```
 
 ## Run Server
@@ -51,18 +105,18 @@ Health checks:
 ```powershell
 curl -X POST http://localhost:8000/api/feedback/analyze ^
   -H "Content-Type: application/json" ^
-  -d "{\"content\":\"Wifi phòng tôi rất yếu\"}"
+  -d "{\"content\":\"The Wi-Fi keeps disconnecting every few minutes.\"}"
 ```
 
 Example response:
 
 ```json
 {
-  "content": "Wifi phòng tôi rất yếu",
+  "content": "The Wi-Fi keeps disconnecting every few minutes.",
   "sentiment": "negative",
   "category": "internet",
   "priority": "medium",
-  "summary": "Tenant feedback is classified as negative, related to internet, with medium priority.",
+  "summary": "This feedback appears to be negative, related to internet, and should be handled with medium priority.",
   "confidence": {
     "sentiment": 0.91,
     "category": 0.87,

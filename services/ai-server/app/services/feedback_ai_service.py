@@ -11,6 +11,7 @@ from app.utils.text_preprocessing import clean_text
 MODEL_NOT_TRAINED_MESSAGE = (
     "AI models are not trained yet. Run scripts/train_feedback_models.py first."
 )
+LOW_CONFIDENCE_THRESHOLD = 0.55
 
 
 def _load_model(path) -> Any:
@@ -62,9 +63,11 @@ def analyze_feedback(content: str) -> FeedbackAnalyzeResponse:
         cleaned_content,
     )
     summary = (
-        f"Tenant feedback is classified as {sentiment}, related to {category}, "
-        f"with {priority} priority."
+        f"This feedback appears to be {sentiment}, related to {category}, "
+        f"and should be handled with {priority} priority."
     )
+    if min(sentiment_confidence, category_confidence, priority_confidence) < LOW_CONFIDENCE_THRESHOLD:
+        summary = f"{summary} Model confidence is low; manual review is recommended."
 
     return FeedbackAnalyzeResponse(
         content=content,

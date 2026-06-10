@@ -9,7 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import joblib
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -36,8 +36,9 @@ def create_pipeline() -> Pipeline:
                 "tfidf",
                 TfidfVectorizer(
                     ngram_range=(1, 2),
-                    min_df=1,
-                    max_features=5000,
+                    min_df=2,
+                    max_df=0.95,
+                    sublinear_tf=True,
                 ),
             ),
             (
@@ -53,19 +54,33 @@ def create_pipeline() -> Pipeline:
 
 
 def train_model(
-    train_data: pd.DataFrame,
-    test_data: pd.DataFrame,
+    dataset: pd.DataFrame,
     target_column: str,
     model_path: Path,
 ) -> None:
+    train_data, test_data = train_test_split(
+        dataset,
+        test_size=TEST_SIZE,
+        random_state=RANDOM_STATE,
+        shuffle=True,
+        stratify=dataset[target_column],
+    )
     model = create_pipeline()
 
     model.fit(train_data["clean_content"], train_data[target_column])
     predictions = model.predict(test_data["clean_content"])
     accuracy = accuracy_score(test_data[target_column], predictions)
+    macro_f1 = f1_score(test_data[target_column], predictions, average="macro")
+    weighted_f1 = f1_score(test_data[target_column], predictions, average="weighted")
 
-    joblib.dump(model, model_path)
-    print(f"{target_column} accuracy: {accuracy:.4f}")
+    final_model = create_pipeline()
+    final_model.fit(dataset["clean_content"], dataset[target_column])
+    joblib.dump(final_model, model_path)
+    print(f"\n{target_column.upper()} MODEL")
+    print(f"Train/test split: {len(train_data)} train / {len(test_data)} test")
+    print(f"Accuracy: {accuracy:.4f}")
+    print(f"Macro F1: {macro_f1:.4f}")
+    print(f"Weighted F1: {weighted_f1:.4f}")
     print(f"Saved {target_column} model to {model_path}")
 
 
@@ -79,19 +94,10 @@ def main() -> None:
         print(f"\n{column}:")
         print(dataset[column].value_counts().sort_index())
 
-    train_data, test_data = train_test_split(
-        dataset,
-        test_size=TEST_SIZE,
-        random_state=RANDOM_STATE,
-        shuffle=True,
-    )
-
-    print(f"\nTrain/test split: {len(train_data)} train / {len(test_data)} test")
-
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    train_model(train_data, test_data, "sentiment", SENTIMENT_MODEL_PATH)
-    train_model(train_data, test_data, "category", CATEGORY_MODEL_PATH)
-    train_model(train_data, test_data, "priority", PRIORITY_MODEL_PATH)
+    train_model(dataset, "sentiment", SENTIMENT_MODEL_PATH)
+    train_model(dataset, "category", CATEGORY_MODEL_PATH)
+    train_model(dataset, "priority", PRIORITY_MODEL_PATH)
 
 
 if __name__ == "__main__":
