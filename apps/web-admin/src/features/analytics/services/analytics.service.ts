@@ -6,7 +6,12 @@ import {
 } from 'firebase/firestore'
 
 import { db } from '../../../config/firebase'
-import { isSupabaseConfigured, supabase } from '../../../lib/supabase'
+import {
+  getSupabaseErrorMessage,
+  isSupabaseConfigured,
+  logSupabaseError,
+  supabase,
+} from '../../../lib/supabase'
 import type {
   AnalyticsData,
   AnalyticsScope,
@@ -517,9 +522,10 @@ function buildAIUsageAnalytics(
   }
 }
 
-function emptyAIUsageAnalytics(supabaseConfigured: boolean) {
+function emptyAIUsageAnalytics(supabaseConfigured: boolean, error?: string) {
   return {
     supabaseConfigured,
+    error,
     totalQuestions: 0,
     totalConversations: 0,
     questionsToday: 0,
@@ -536,8 +542,10 @@ async function getAIUsageFromSupabase(
   filter: DateRangeFilter,
 ) {
   if (!supabase || !isSupabaseConfigured) {
-    return emptyAIUsageAnalytics(false)
+    return emptyAIUsageAnalytics(false, 'AI usage analytics requires Supabase configuration.')
   }
+
+  console.info('Loading analytics...', { source: 'supabase_ai_usage', scope })
 
   const { start, end } = getRangeBounds(filter)
   let conversationsQuery = supabase
@@ -570,9 +578,20 @@ async function getAIUsageFromSupabase(
     logsQuery,
   ])
 
-  if (conversationResult.error) throw conversationResult.error
-  if (logResult.error) throw logResult.error
+  if (conversationResult.error) {
+    logSupabaseError('Loading AI usage conversations', conversationResult.error)
+    return emptyAIUsageAnalytics(true, getSupabaseErrorMessage(conversationResult.error))
+  }
+  if (logResult.error) {
+    logSupabaseError('Loading AI usage logs', logResult.error)
+    return emptyAIUsageAnalytics(true, getSupabaseErrorMessage(logResult.error))
+  }
 
+  console.info('Analytics loaded.', {
+    source: 'supabase_ai_usage',
+    conversations: conversationResult.data?.length ?? 0,
+    logs: logResult.data?.length ?? 0,
+  })
   return buildAIUsageAnalytics(
     conversationResult.data?.length ?? 0,
     (logResult.data ?? []) as Array<{ intent?: unknown; created_at?: unknown }>,
@@ -612,6 +631,7 @@ function buildAnalyticsData(
   scope: AnalyticsScope,
   filter: DateRangeFilter,
   aiUsageAnalytics: AnalyticsData['aiUsage'],
+  coreError?: string,
 ): AnalyticsData {
   const rooms = filterByScope(collections.rooms, scope).map((documentSnapshot) => ({
     id: documentSnapshot.id,
@@ -634,6 +654,7 @@ function buildAnalyticsData(
     feedbackAnalytics.positive + feedbackAnalytics.neutral + feedbackAnalytics.negative
 
   return {
+    coreError,
     summary: {
       revenue: revenue.totalRevenue,
       occupancyRate: occupancy.occupancyRate,
@@ -681,16 +702,34 @@ export async function getAnalyticsData(
   scope: AnalyticsScope,
   filter: DateRangeFilter,
 ): Promise<AnalyticsData> {
-  const snapshots = await Promise.all(
+  console.info('Loading analytics...', { source: 'firestore_core', scope })
+  const snapshots = await Promise.allSettled(
     analyticsCollections.map(async (collectionName) => ({
       collectionName,
       docs: (await getDocs(collection(db, collectionName))).docs,
     })),
   )
-  const collections = snapshots.reduce(
+  const failedSnapshots = snapshots.filter(
+    (snapshot): snapshot is PromiseRejectedResult => snapshot.status === 'rejected',
+  )
+  const fulfilledSnapshots = snapshots.filter(
+    (snapshot): snapshot is PromiseFulfilledResult<{
+      collectionName: AnalyticsCollectionKey
+      docs: QueryDocumentSnapshot<DocumentData>[]
+    }> => snapshot.status === 'fulfilled',
+  )
+
+  failedSnapshots.forEach((snapshot) => {
+    console.warn('Analytics failed.', {
+      source: 'firestore_core',
+      error: snapshot.reason,
+    })
+  })
+
+  const collections = fulfilledSnapshots.reduce(
     (current, snapshot) => ({
       ...current,
-      [snapshot.collectionName]: snapshot.docs,
+      [snapshot.value.collectionName]: snapshot.value.docs,
     }),
     {
       rooms: [],
@@ -703,6 +742,15 @@ export async function getAnalyticsData(
   )
 
   const aiUsage = await getAIUsageFromSupabase(scope, filter)
+  const coreError =
+    failedSnapshots.length > 0
+      ? 'Some core analytics data could not be loaded. Please check Firebase quota or permissions.'
+      : undefined
 
-  return buildAnalyticsData(collections, scope, filter, aiUsage)
+  console.info('Analytics loaded.', {
+    source: 'firestore_core',
+    failedCollections: failedSnapshots.length,
+  })
+
+  return buildAnalyticsData(collections, scope, filter, aiUsage, coreError)
 }

@@ -10,6 +10,8 @@ import {
 import {
   createConversation,
   getConversationMessages,
+  getAIHistoryUnavailableMessage,
+  getLastAIHistoryError,
   isSupabaseConfigured,
   listConversations,
   logAIUsage,
@@ -102,6 +104,7 @@ function AiAssistantPage() {
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  const [historyWarning, setHistoryWarning] = useState('')
   const messageListRef = useRef<HTMLDivElement | null>(null)
 
   const selectedConversationId = selectedConversation?.id
@@ -125,14 +128,20 @@ function AiAssistantPage() {
 
     setLoadingConversations(true)
     setError('')
+    setHistoryWarning('')
 
     try {
       if (!isSupabaseConfigured) {
+        setHistoryWarning('AI conversation history is unavailable. You can still use temporary chat.')
         setLoadingConversations(false)
         return
       }
 
       const nextConversations = await listConversations(currentUser.uid)
+      const historyError = getLastAIHistoryError()
+      if (historyError) {
+        setHistoryWarning(getAIHistoryUnavailableMessage(historyError))
+      }
       setConversations(nextConversations)
       setSelectedConversation((current) => {
         if (current && nextConversations.some((item) => item.id === current.id)) {
@@ -143,7 +152,7 @@ function AiAssistantPage() {
       })
     } catch (loadError) {
       console.error('Unable to load AI conversations.', loadError)
-      setError('Unable to load AI conversations. Please try again.')
+      setHistoryWarning(getAIHistoryUnavailableMessage(loadError))
     } finally {
       setLoadingConversations(false)
     }
@@ -165,11 +174,15 @@ function AiAssistantPage() {
       }
 
       const nextMessages = await getConversationMessages(selectedConversationId, currentUser?.uid ?? '')
+      const historyError = getLastAIHistoryError()
+      if (historyError) {
+        setHistoryWarning(getAIHistoryUnavailableMessage(historyError))
+      }
       setMessages(nextMessages)
       scrollToBottom()
     } catch (loadError) {
       console.error('Unable to load AI messages.', loadError)
-      setError('Unable to load this conversation. Please try again.')
+      setHistoryWarning(getAIHistoryUnavailableMessage(loadError))
     } finally {
       setLoadingMessages(false)
     }
@@ -192,17 +205,32 @@ function AiAssistantPage() {
 
     setError('')
 
+    const localConversation = createLocalConversation(currentUser.uid)
+    setConversations((current) => [localConversation, ...current])
+    setSelectedConversation(localConversation)
+    setMessages([])
+
+    if (!isSupabaseConfigured) {
+      setHistoryWarning('AI conversation history is unavailable. You can still use temporary chat.')
+      return
+    }
+
     try {
-      const conversation = isSupabaseConfigured
-        ? await createConversation(currentUser.uid)
-        : createLocalConversation(currentUser.uid)
-      if (!conversation) return
-      setConversations((current) => [conversation, ...current])
+      const conversation = await createConversation(currentUser.uid)
+
+      if (!conversation) {
+        setHistoryWarning(getAIHistoryUnavailableMessage(getLastAIHistoryError()))
+        return
+      }
+
+      setConversations((current) => [
+        conversation,
+        ...current.filter((item) => item.id !== localConversation.id),
+      ])
       setSelectedConversation(conversation)
-      setMessages([])
     } catch (createError) {
       console.error('Unable to create AI conversation.', createError)
-      setError('Unable to create a new chat. Please try again.')
+      setHistoryWarning(getAIHistoryUnavailableMessage(createError))
     }
   }
 
@@ -226,7 +254,8 @@ function AiAssistantPage() {
       if (!conversation) {
         const title = getAssistantConversationTitle(result.intent, trimmedQuestion)
         conversation = isSupabaseConfigured
-          ? await createConversation(currentUser.uid, title)
+          ? (await createConversation(currentUser.uid, title)) ??
+            createLocalConversation(currentUser.uid, title)
           : createLocalConversation(currentUser.uid, title)
       }
 
@@ -237,15 +266,21 @@ function AiAssistantPage() {
       const nextTitle = conversation.title === 'New Conversation'
         ? getAssistantConversationTitle(result.intent, trimmedQuestion)
         : conversation.title
-      const userMessage = isSupabaseConfigured
+      const shouldPersist = isSupabaseConfigured && !conversation.id.startsWith('local-')
+      const userMessage = shouldPersist
         ? await saveUserMessage(conversation.id, currentUser.uid, trimmedQuestion, result.intent)
         : createLocalMessage(conversation.id, 'user', trimmedQuestion)
-      const assistantMessage = isSupabaseConfigured
+      const assistantMessage = shouldPersist
         ? await saveAssistantMessage(conversation.id, currentUser.uid, result.answer, result.intent)
         : createLocalMessage(conversation.id, 'assistant', result.answer)
 
+      const safeUserMessage =
+        userMessage ?? createLocalMessage(conversation.id, 'user', trimmedQuestion)
+      const safeAssistantMessage =
+        assistantMessage ?? createLocalMessage(conversation.id, 'assistant', result.answer)
+
       if (!userMessage || !assistantMessage) {
-        throw new Error('Unable to save AI messages.')
+        setHistoryWarning(getAIHistoryUnavailableMessage(getLastAIHistoryError()))
       }
 
       let updatedConversation: AssistantConversation = {
@@ -254,7 +289,7 @@ function AiAssistantPage() {
         updatedAt: new Date().toISOString(),
       }
 
-      if (isSupabaseConfigured) {
+      if (shouldPersist) {
         updatedConversation =
           (await updateConversationTitle(conversation.id, currentUser.uid, nextTitle)) ??
           updatedConversation
@@ -270,7 +305,7 @@ function AiAssistantPage() {
       }
 
       setSelectedConversation(updatedConversation)
-      setMessages((current) => [...current, userMessage, assistantMessage])
+      setMessages((current) => [...current, safeUserMessage, safeAssistantMessage])
       setConversations((current) => {
         const withoutCurrent = current.filter((item) => item.id !== updatedConversation.id)
 
@@ -354,6 +389,7 @@ function AiAssistantPage() {
         </div>
 
         {error ? <div className="room-error">{error}</div> : null}
+        {historyWarning ? <div className="room-empty-state">{historyWarning}</div> : null}
 
         <div className="ai-message-list" ref={messageListRef}>
           {loadingMessages ? (

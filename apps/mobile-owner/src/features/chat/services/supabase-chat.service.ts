@@ -96,12 +96,15 @@ async function listRooms(userId: string) {
   const { data, error } = await client
     .from('chat_rooms')
     .select('*')
-    .contains('participant_ids', [userId])
     .order('updated_at', { ascending: false })
 
   if (error) throw error
 
-  return sortRooms(((data ?? []) as ChatRoomRow[]).map(mapRoom))
+  return sortRooms(
+    ((data ?? []) as ChatRoomRow[])
+      .map(mapRoom)
+      .filter((room) => room.participantIds.includes(userId)),
+  )
 }
 
 export function subscribeToUserChatRooms(

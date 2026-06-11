@@ -1,4 +1,9 @@
-import { isSupabaseConfigured, supabase } from '../../../lib/supabase'
+import {
+  getSupabaseErrorMessage,
+  isSupabaseConfigured,
+  logSupabaseError,
+  supabase,
+} from '../../../lib/supabase'
 import type {
   AssistantConversation,
   AssistantIntent,
@@ -24,6 +29,20 @@ type AIMessageRow = {
   created_at: string
 }
 
+let lastAIHistoryError: unknown = null
+
+export function getLastAIHistoryError() {
+  return lastAIHistoryError
+}
+
+function clearAIHistoryError() {
+  lastAIHistoryError = null
+}
+
+function rememberAIHistoryError(error: unknown) {
+  lastAIHistoryError = error
+}
+
 function ensureSupabase() {
   if (!supabase || !isSupabaseConfigured) {
     console.warn('Supabase is not configured. AI history and chat persistence are disabled.')
@@ -31,6 +50,12 @@ function ensureSupabase() {
   }
 
   return supabase
+}
+
+export function getAIHistoryUnavailableMessage(error?: unknown) {
+  if (!error) return 'AI conversation history is unavailable. You can still use temporary chat.'
+
+  return `${getSupabaseErrorMessage(error)} You can still use temporary chat.`
 }
 
 function mapConversation(row: AIConversationRow): AssistantConversation {
@@ -57,14 +82,21 @@ export async function createConversation(ownerId: string, title = 'New Conversat
   const client = ensureSupabase()
   if (!client) return null
 
+  console.info('Creating AI conversation...', { ownerId, title })
   const { data, error } = await client
     .from('ai_conversations')
     .insert({ owner_id: ownerId, title })
     .select('*')
     .single<AIConversationRow>()
 
-  if (error) throw error
+  if (error) {
+    rememberAIHistoryError(error)
+    logSupabaseError('Creating AI conversation', error)
+    return null
+  }
 
+  clearAIHistoryError()
+  console.info('AI conversation created.', { id: data.id })
   return mapConversation(data)
 }
 
@@ -72,14 +104,21 @@ export async function listConversations(ownerId: string) {
   const client = ensureSupabase()
   if (!client) return []
 
+  console.info('Loading AI conversations...', { ownerId })
   const { data, error } = await client
     .from('ai_conversations')
     .select('*')
     .eq('owner_id', ownerId)
     .order('updated_at', { ascending: false })
 
-  if (error) throw error
+  if (error) {
+    rememberAIHistoryError(error)
+    logSupabaseError('Loading AI conversations', error)
+    return []
+  }
 
+  clearAIHistoryError()
+  console.info('AI conversations loaded.', { count: data?.length ?? 0 })
   return (data as AIConversationRow[]).map(mapConversation)
 }
 
@@ -87,6 +126,7 @@ export async function getConversationMessages(conversationId: string, ownerId: s
   const client = ensureSupabase()
   if (!client) return []
 
+  console.info('Loading AI conversation messages...', { conversationId, ownerId })
   const { data, error } = await client
     .from('ai_messages')
     .select('*')
@@ -95,8 +135,13 @@ export async function getConversationMessages(conversationId: string, ownerId: s
     .order('created_at', { ascending: true })
     .limit(50)
 
-  if (error) throw error
+  if (error) {
+    rememberAIHistoryError(error)
+    logSupabaseError('Loading AI conversation messages', error)
+    return []
+  }
 
+  clearAIHistoryError()
   return (data as AIMessageRow[]).map(mapMessage)
 }
 
@@ -140,8 +185,13 @@ async function saveMessage(
     .select('*')
     .single<AIMessageRow>()
 
-  if (error) throw error
+  if (error) {
+    rememberAIHistoryError(error)
+    logSupabaseError(`Saving AI ${role} message`, error)
+    return null
+  }
 
+  clearAIHistoryError()
   return mapMessage(data)
 }
 
@@ -161,8 +211,13 @@ export async function updateConversationTitle(
     .select('*')
     .single<AIConversationRow>()
 
-  if (error) throw error
+  if (error) {
+    rememberAIHistoryError(error)
+    logSupabaseError('Updating AI conversation title', error)
+    return null
+  }
 
+  clearAIHistoryError()
   return mapConversation(data)
 }
 
@@ -178,8 +233,13 @@ export async function touchConversation(conversationId: string, ownerId: string)
     .select('*')
     .single<AIConversationRow>()
 
-  if (error) throw error
+  if (error) {
+    rememberAIHistoryError(error)
+    logSupabaseError('Touching AI conversation', error)
+    return null
+  }
 
+  clearAIHistoryError()
   return mapConversation(data)
 }
 
@@ -201,7 +261,12 @@ export async function logAIUsage(
     answer_preview: answerPreview,
   })
 
-  if (error) throw error
+  if (error) {
+    rememberAIHistoryError(error)
+    logSupabaseError('Logging AI usage', error)
+  } else {
+    clearAIHistoryError()
+  }
 }
 
 export { isSupabaseConfigured }

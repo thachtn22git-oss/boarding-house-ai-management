@@ -259,6 +259,15 @@ function AnalyticsPage() {
         </section>
       ) : null}
 
+      {data.coreError ? (
+        <section className="dashboard-card dashboard-state-card">
+          <div>
+            <h2>Core analytics issue</h2>
+            <p>{data.coreError}</p>
+          </div>
+        </section>
+      ) : null}
+
       <DashboardSection
         title="Dashboard Summary"
         description="High-level analytics for the selected reporting period."
@@ -324,8 +333,10 @@ function AnalyticsPage() {
         title="AI Usage"
         description="Real assistant usage based on saved AI conversations and user questions."
       >
-        {!data.aiUsage.supabaseConfigured ? (
-          <div className="room-empty-state">AI usage analytics requires Supabase configuration.</div>
+        {!data.aiUsage.supabaseConfigured || data.aiUsage.error ? (
+          <div className="room-empty-state">
+            {data.aiUsage.error ?? 'AI usage analytics requires Supabase configuration.'}
+          </div>
         ) : null}
         <div className="stats-grid">
           <StatCard

@@ -155,6 +155,12 @@ function ChatPage() {
       return
     }
 
+    console.info('Selected chat contact:', contact)
+    console.info('Current chat user:', {
+      ownerId: currentUser.uid,
+      role: currentUser.role,
+      tenantUserId: contact.userId,
+    })
     setError('')
 
     try {
@@ -207,7 +213,7 @@ function ChatPage() {
       setContactsOpen(false)
     } catch (startError) {
       console.warn('Unable to start chat.', startError)
-      setError('Unable to start this conversation.')
+      setError('Unable to start chat. Please check Supabase tables or policies.')
     }
   }
 

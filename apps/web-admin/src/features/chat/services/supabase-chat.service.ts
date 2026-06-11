@@ -1,7 +1,12 @@
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 
 import { db } from '../../../config/firebase'
-import { isSupabaseConfigured, supabase } from '../../../lib/supabase'
+import {
+  getSupabaseErrorMessage,
+  isSupabaseConfigured,
+  logSupabaseError,
+  supabase,
+} from '../../../lib/supabase'
 import type { AppUser, UserRole } from '../../../types/user'
 import { createNotification } from '../../notifications/services/notification.service'
 import type { Tenant } from '../../tenants/types'
@@ -183,17 +188,35 @@ async function getCurrentTenantProfile(currentUser: AppUser) {
     : null
 }
 
-async function findExistingChatRoom(type: ChatRoomType, participantIds: string[]) {
+async function findExistingChatRoom(
+  type: ChatRoomType,
+  participantIds: string[],
+  ownerId?: string,
+) {
   const client = ensureSupabase()
   if (!client) return null
 
-  const { data, error } = await client
+  let roomQuery = client
     .from('chat_rooms')
     .select('*')
     .eq('type', type)
-    .contains('participant_ids', participantIds)
 
-  if (error) throw error
+  if (ownerId) {
+    roomQuery = roomQuery.eq('owner_id', ownerId)
+  }
+
+  const { data, error } = await roomQuery
+
+  if (error) {
+    logSupabaseError('Existing chat room query', error)
+    throw new Error(getSupabaseErrorMessage(error))
+  }
+
+  console.info('Existing chat room query result:', {
+    type,
+    ownerId,
+    resultCount: data?.length ?? 0,
+  })
 
   return ((data ?? []) as ChatRoomRow[])
     .map(mapChatRoom)
@@ -207,12 +230,18 @@ export async function listChatRooms(userId: string) {
   const { data, error } = await client
     .from('chat_rooms')
     .select('*')
-    .contains('participant_ids', [userId])
     .order('updated_at', { ascending: false })
 
-  if (error) throw error
+  if (error) {
+    logSupabaseError('Listing chat rooms', error)
+    throw new Error(getSupabaseErrorMessage(error))
+  }
 
-  return sortRooms(((data ?? []) as ChatRoomRow[]).map(mapChatRoom))
+  return sortRooms(
+    ((data ?? []) as ChatRoomRow[])
+      .map(mapChatRoom)
+      .filter((room) => room.participantIds.includes(userId)),
+  )
 }
 
 export function subscribeToUserChatRooms(
@@ -233,7 +262,10 @@ export function subscribeToUserChatRooms(
       .then((rooms) => {
         if (active && Array.isArray(rooms)) callback(rooms)
       })
-      .catch((error) => onError?.(error))
+    .catch((error) => {
+      logSupabaseError('Loading chat rooms', error)
+      onError?.(error)
+    })
   }
 
   load()
@@ -268,7 +300,10 @@ export async function listMessages(chatRoomId: string) {
     .eq('chat_room_id', chatRoomId)
     .order('created_at', { ascending: true })
 
-  if (error) throw error
+  if (error) {
+    logSupabaseError('Listing chat messages', error)
+    throw new Error(getSupabaseErrorMessage(error))
+  }
 
   return ((data ?? []) as ChatMessageRow[]).map(mapChatMessage)
 }
@@ -290,7 +325,10 @@ export function subscribeToChatMessages(
       .then((messages) => {
         if (active) callback(messages)
       })
-      .catch((error) => onError?.(error))
+      .catch((error) => {
+        logSupabaseError('Loading chat messages', error)
+        onError?.(error)
+      })
   }
 
   load()
@@ -337,7 +375,10 @@ export async function sendMessage(
     .eq('id', chatRoomId)
     .single<ChatRoomRow>()
 
-  if (roomError) throw roomError
+  if (roomError) {
+    logSupabaseError('Loading chat room for send', roomError)
+    throw new Error(getSupabaseErrorMessage(roomError))
+  }
 
   const room = mapChatRoom(roomData)
   if (!room.participantIds.includes(sender.uid)) {
@@ -353,7 +394,10 @@ export async function sendMessage(
     read_by: [sender.uid],
   })
 
-  if (messageError) throw messageError
+  if (messageError) {
+    logSupabaseError('Sending chat message', messageError)
+    throw new Error(getSupabaseErrorMessage(messageError))
+  }
 
   const unreadCounts = { ...room.unreadCounts }
   room.participantIds.forEach((participantId) => {
@@ -374,7 +418,10 @@ export async function sendMessage(
     })
     .eq('id', chatRoomId)
 
-  if (updateError) throw updateError
+  if (updateError) {
+    logSupabaseError('Updating chat room after message', updateError)
+    throw new Error(getSupabaseErrorMessage(updateError))
+  }
 
   const preview = trimmedText.length > 80 ? `${trimmedText.slice(0, 77)}...` : trimmedText
 
@@ -417,7 +464,10 @@ export async function markChatRoomAsRead(chatRoomId: string, userId: string) {
     .eq('id', chatRoomId)
     .single<{ unread_counts: Record<string, number>; participant_ids: string[] }>()
 
-  if (error) throw error
+  if (error) {
+    logSupabaseError('Loading chat room unread counts', error)
+    throw new Error(getSupabaseErrorMessage(error))
+  }
   if (!data.participant_ids.includes(userId)) {
     throw new Error('You are not allowed to access this conversation.')
   }
@@ -433,7 +483,10 @@ export async function markChatRoomAsRead(chatRoomId: string, userId: string) {
     })
     .eq('id', chatRoomId)
 
-  if (updateError) throw updateError
+  if (updateError) {
+    logSupabaseError('Marking chat room as read', updateError)
+    throw new Error(getSupabaseErrorMessage(updateError))
+  }
 }
 
 export async function getOrCreateOwnerTenantChatRoom(
@@ -444,7 +497,13 @@ export async function getOrCreateOwnerTenantChatRoom(
   const client = ensureSupabase()
   if (!client) return firestoreChat.getOrCreateOwnerTenantChatRoom(ownerId, tenantUserId, tenantProfile)
 
-  const existingRoom = await findExistingChatRoom('owner_tenant', [ownerId, tenantUserId])
+  console.info('Creating chat room...', {
+    type: 'owner_tenant',
+    ownerId,
+    tenantUserId,
+    tenantEmail: tenantProfile.email,
+  })
+  const existingRoom = await findExistingChatRoom('owner_tenant', [ownerId, tenantUserId], ownerId)
   if (existingRoom) return existingRoom
 
   const ownerProfile = await getUserProfileByUid(ownerId)
@@ -453,7 +512,7 @@ export async function getOrCreateOwnerTenantChatRoom(
     .insert({
       type: 'owner_tenant',
       owner_id: ownerId,
-      room_id: tenantProfile.roomId,
+      room_id: tenantProfile.roomId || null,
       participant_ids: [ownerId, tenantUserId],
       participant_roles: {
         [ownerId]: 'owner',
@@ -475,8 +534,12 @@ export async function getOrCreateOwnerTenantChatRoom(
     .select('*')
     .single<ChatRoomRow>()
 
-  if (error) throw error
+  if (error) {
+    logSupabaseError('Creating owner tenant chat room', error)
+    throw new Error(getSupabaseErrorMessage(error))
+  }
 
+  console.info('Chat room created.', { id: data.id })
   return mapChatRoom(data)
 }
 
@@ -497,7 +560,7 @@ export async function getOrCreateTenantTenantChatRoom(
   }
 
   const participantIds = [currentTenantUserId, targetTenantUserId]
-  const existingRoom = await findExistingChatRoom('tenant_tenant', participantIds)
+  const existingRoom = await findExistingChatRoom('tenant_tenant', participantIds, currentTenantProfile.ownerId)
   if (existingRoom) return existingRoom
 
   const { data, error } = await client
@@ -527,8 +590,12 @@ export async function getOrCreateTenantTenantChatRoom(
     .select('*')
     .single<ChatRoomRow>()
 
-  if (error) throw error
+  if (error) {
+    logSupabaseError('Creating tenant tenant chat room', error)
+    throw new Error(getSupabaseErrorMessage(error))
+  }
 
+  console.info('Chat room created.', { id: data.id })
   return mapChatRoom(data)
 }
 

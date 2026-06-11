@@ -42,6 +42,7 @@ export type TopRoomAnalytics = {
 }
 
 export type AnalyticsData = {
+  coreError?: string
   summary: {
     revenue: number
     occupancyRate: number
@@ -105,6 +106,7 @@ export type AnalyticsData = {
   }
   aiUsage: {
     supabaseConfigured: boolean
+    error?: string
     totalQuestions: number
     totalConversations: number
     questionsToday: number
