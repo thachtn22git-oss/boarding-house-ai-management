@@ -1,4 +1,16 @@
-import { addDoc, collection, getDocs, query, serverTimestamp, where, type DocumentData } from 'firebase/firestore'
+import {
+  addDoc,
+  collection,
+  doc,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+  type DocumentData,
+} from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import { formatCurrency } from '../../utils/format'
 
@@ -13,22 +25,59 @@ export type AssistantIntent =
   | 'tenant_count'
   | 'unknown'
 
+export type AssistantMessageRole = 'user' | 'assistant'
+
+export type AssistantConversation = {
+  id: string
+  ownerId: string
+  title: string
+  createdAt?: unknown
+  updatedAt?: unknown
+}
+
+export type AssistantMessageRecord = {
+  id: string
+  conversationId: string
+  role: AssistantMessageRole
+  content: string
+  createdAt?: unknown
+}
+
 type Row = {
   id: string
   data: DocumentData
 }
 
-function detectIntent(question: string): AssistantIntent {
-  const text = question.toLowerCase()
+const conversationsCollection = collection(db, 'ai_conversations')
+const messagesCollection = collection(db, 'ai_messages')
 
-  if (text.includes('available') || text.includes('vacant')) return 'room_availability'
-  if (text.includes('revenue') || text.includes('earn')) return 'monthly_revenue'
-  if (text.includes('overdue') || text.includes('unpaid') || text.includes('not paid')) return 'overdue_invoices'
-  if (text.includes('expire') || text.includes('ending')) return 'expiring_contracts'
-  if (text.includes('urgent') || text.includes('attention') || text.includes('serious')) return 'urgent_feedback'
-  if (text.includes('complaints') || text.includes('feedback') || text.includes('common issues')) return 'feedback_summary'
-  if (text.includes('electricity') || text.includes('water') || text.includes('utility')) return 'utility_summary'
-  if (text.includes('tenant')) return 'tenant_count'
+function normalizeQuestion(question: string) {
+  return question
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function hasAny(text: string, keywords: string[]) {
+  return keywords.some((keyword) => text.includes(keyword))
+}
+
+export function detectAssistantIntent(question: string): AssistantIntent {
+  const text = normalizeQuestion(question)
+  const hasRoomKeyword = hasAny(text, ['room', 'rooms'])
+  const hasAvailabilityKeyword = hasAny(text, ['available', 'availability', 'vacant', 'vacancy', 'empty'])
+  const hasInvoiceKeyword = hasAny(text, ['invoice', 'invoices', 'payment', 'payments', 'bill', 'bills'])
+  const hasOverdueKeyword = hasAny(text, ['overdue', 'unpaid', 'late', 'not paid'])
+
+  if ((hasRoomKeyword && hasAvailabilityKeyword) || text === 'available rooms' || text === 'vacant rooms') return 'room_availability'
+  if (text.includes('revenue this month') || text.includes('monthly revenue') || text.includes('earn this month') || text.includes('earned this month')) return 'monthly_revenue'
+  if ((hasInvoiceKeyword && hasOverdueKeyword) || text.includes('who has not paid') || text.includes('late payments') || text.includes('unpaid bills') || text.includes('overdue bills')) return 'overdue_invoices'
+  if (text.includes('expire soon') || text.includes('expiring') || text.includes('ending soon') || text.includes('expiring this month')) return 'expiring_contracts'
+  if (text.includes('urgent feedback') || text.includes('needs attention') || text.includes('serious complaint') || text.includes('serious complaints')) return 'urgent_feedback'
+  if (text.includes('main tenant complaints') || text.includes('summarize feedback') || text.includes('common issues') || text.includes('feedback summary')) return 'feedback_summary'
+  if (text.includes('electricity usage') || text.includes('water usage') || text.includes('utility cost') || text.includes('utility summary')) return 'utility_summary'
+  if (text.includes('how many tenants') || text.includes('tenant count') || text.includes('active tenants')) return 'tenant_count'
 
   return 'unknown'
 }
@@ -72,8 +121,50 @@ function list(items: string[]) {
   return items.map((item) => `- ${item}`).join('\n')
 }
 
-export async function answerOwnerQuestion(ownerId: string, question: string) {
-  const intent = detectIntent(question)
+function mapConversation(id: string, data: DocumentData): AssistantConversation {
+  return {
+    id,
+    ownerId: String(data.ownerId ?? ''),
+    title: String(data.title ?? 'New Conversation'),
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  }
+}
+
+function mapMessage(id: string, data: DocumentData): AssistantMessageRecord {
+  return {
+    id,
+    conversationId: String(data.conversationId ?? ''),
+    role: data.role === 'user' ? 'user' : 'assistant',
+    content: String(data.content ?? ''),
+    createdAt: data.createdAt,
+  }
+}
+
+function sortConversations(left: AssistantConversation, right: AssistantConversation) {
+  return (getTime(right.updatedAt) || getTime(right.createdAt)) - (getTime(left.updatedAt) || getTime(left.createdAt))
+}
+
+function sortMessages(left: AssistantMessageRecord, right: AssistantMessageRecord) {
+  return getTime(left.createdAt) - getTime(right.createdAt)
+}
+
+function getConversationTitle(intent: AssistantIntent, question: string) {
+  const text = normalizeQuestion(question)
+
+  if (intent === 'monthly_revenue' || text.includes('revenue')) return 'Revenue Analysis'
+  if (intent === 'overdue_invoices' || text.includes('overdue')) return 'Overdue Invoices'
+  if (intent === 'feedback_summary' || text.includes('complaint')) return 'Tenant Complaints'
+  if (intent === 'room_availability') return 'Room Availability'
+  if (intent === 'expiring_contracts') return 'Expiring Contracts'
+  if (intent === 'urgent_feedback') return 'Feedback Review'
+  if (intent === 'utility_summary') return 'Utility Summary'
+  if (intent === 'tenant_count') return 'Tenant Overview'
+
+  return 'New Conversation'
+}
+
+async function generateOwnerAnswer(ownerId: string, intent: AssistantIntent) {
   let answer = "I can help with rooms, tenants, invoices, contracts, utilities, and feedback. Try asking: 'Which invoices are overdue?'"
 
   if (intent === 'room_availability') {
@@ -147,6 +238,126 @@ export async function answerOwnerQuestion(ownerId: string, question: string) {
     const active = tenants.filter((tenant) => tenant.data.status === 'active')
     answer = `You have ${tenants.length} tenant(s), including ${active.length} active tenant(s).`
   }
+
+  return answer
+}
+
+export async function getOwnerAIConversations(ownerId: string): Promise<AssistantConversation[]> {
+  try {
+    const snapshot = await getDocs(query(conversationsCollection, where('ownerId', '==', ownerId), orderBy('updatedAt', 'desc')))
+
+    return snapshot.docs.map((item) => mapConversation(item.id, item.data()))
+  } catch (error) {
+    console.warn('Unable to load ordered AI conversations. Falling back to client sort.', error)
+    const snapshot = await getDocs(query(conversationsCollection, where('ownerId', '==', ownerId)))
+
+    return snapshot.docs.map((item) => mapConversation(item.id, item.data())).sort(sortConversations)
+  }
+}
+
+export async function getAssistantMessages(conversationId: string, pageSize = 50): Promise<AssistantMessageRecord[]> {
+  try {
+    const snapshot = await getDocs(query(messagesCollection, where('conversationId', '==', conversationId), orderBy('createdAt', 'desc'), limit(pageSize)))
+
+    return snapshot.docs.map((item) => mapMessage(item.id, item.data())).sort(sortMessages)
+  } catch (error) {
+    console.warn('Unable to load ordered AI messages. Falling back to client sort.', error)
+    const snapshot = await getDocs(query(messagesCollection, where('conversationId', '==', conversationId)))
+
+    return snapshot.docs.map((item) => mapMessage(item.id, item.data())).sort(sortMessages).slice(-pageSize)
+  }
+}
+
+export async function createAssistantConversation(ownerId: string, title = 'New Conversation') {
+  const documentRef = await addDoc(conversationsCollection, {
+    ownerId,
+    title,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  })
+
+  return {
+    id: documentRef.id,
+    ownerId,
+    title,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+export async function askOwnerAssistant({
+  ownerId,
+  question,
+  conversationId,
+  conversationTitle,
+}: {
+  ownerId: string
+  question: string
+  conversationId?: string | null
+  conversationTitle?: string
+}) {
+  const trimmedQuestion = question.trim()
+  if (!trimmedQuestion) throw new Error('Question is required.')
+
+  const intent = detectAssistantIntent(trimmedQuestion)
+  let conversation = conversationId
+    ? {
+        id: conversationId,
+        ownerId,
+        title: conversationTitle || 'New Conversation',
+      }
+    : await createAssistantConversation(ownerId, getConversationTitle(intent, trimmedQuestion))
+
+  const userMessageRef = await addDoc(messagesCollection, {
+    conversationId: conversation.id,
+    role: 'user',
+    content: trimmedQuestion,
+    createdAt: serverTimestamp(),
+  })
+  const answer = await generateOwnerAnswer(ownerId, intent)
+  const assistantMessageRef = await addDoc(messagesCollection, {
+    conversationId: conversation.id,
+    role: 'assistant',
+    content: answer,
+    createdAt: serverTimestamp(),
+  })
+  const title = conversation.title === 'New Conversation' ? getConversationTitle(intent, trimmedQuestion) : conversation.title
+
+  await updateDoc(doc(db, 'ai_conversations', conversation.id), {
+    title,
+    updatedAt: serverTimestamp(),
+  })
+
+  conversation = {
+    ...conversation,
+    title,
+    updatedAt: new Date().toISOString(),
+  }
+
+  return {
+    intent,
+    answer,
+    conversation,
+    userMessage: {
+      id: userMessageRef.id,
+      conversationId: conversation.id,
+      role: 'user' as const,
+      content: trimmedQuestion,
+      createdAt: new Date().toISOString(),
+    },
+    assistantMessage: {
+      id: assistantMessageRef.id,
+      conversationId: conversation.id,
+      role: 'assistant' as const,
+      content: answer,
+      createdAt: new Date().toISOString(),
+    },
+  }
+}
+
+export async function answerOwnerQuestion(ownerId: string, question: string) {
+  const intent = detectAssistantIntent(question)
+  const answer = await generateOwnerAnswer(ownerId, intent)
 
   void addDoc(collection(db, 'aiAssistantLogs'), {
     ownerId,

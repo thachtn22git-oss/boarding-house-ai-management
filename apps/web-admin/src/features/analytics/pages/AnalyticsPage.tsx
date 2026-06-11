@@ -99,7 +99,8 @@ function hasAnalyticsData(data: AnalyticsData) {
     data.contracts.total > 0 ||
     data.invoices.paid + data.invoices.pending + data.invoices.overdue > 0 ||
     data.tenants.total > 0 ||
-    data.feedback.total > 0
+    data.feedback.total > 0 ||
+    data.aiUsage.totalQuestions > 0
   )
 }
 
@@ -318,6 +319,48 @@ function AnalyticsPage() {
           />
         </div>
       </DashboardSection>
+
+      <DashboardSection
+        title="AI Usage"
+        description="Real assistant usage based on saved AI conversations and user questions."
+      >
+        <div className="stats-grid">
+          <StatCard
+            label="Total AI Questions"
+            value={String(data.aiUsage.totalQuestions)}
+            tone="primary"
+          />
+          <StatCard
+            label="Total Conversations"
+            value={String(data.aiUsage.totalConversations)}
+            tone="success"
+          />
+          <StatCard
+            label="Questions Today"
+            value={String(data.aiUsage.questionsToday)}
+            tone="warning"
+          />
+          <StatCard
+            label="Average Questions Per Conversation"
+            value={percentFormatter.format(data.aiUsage.averageQuestionsPerConversation)}
+            tone="primary"
+          />
+        </div>
+      </DashboardSection>
+
+      <div className="analytics-grid">
+        <AnalyticsChartCard title="Most Asked Question Types">
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={data.aiUsage.mostAskedQuestionTypes}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="label" />
+              <YAxis allowDecimals={false} />
+              <Tooltip />
+              <Bar dataKey="value" fill="#2563eb" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </AnalyticsChartCard>
+      </div>
 
       <div className="analytics-grid">
         <AnalyticsChartCard title="Monthly Revenue" description="Paid invoice revenue by month.">

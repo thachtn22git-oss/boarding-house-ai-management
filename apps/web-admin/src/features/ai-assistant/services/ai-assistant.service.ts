@@ -1,9 +1,13 @@
 import {
   addDoc,
   collection,
+  doc,
   getDocs,
+  limit,
+  orderBy,
   query,
   serverTimestamp,
+  updateDoc,
   where,
   type DocumentData,
 } from 'firebase/firestore'
@@ -27,10 +31,37 @@ export type AssistantAnswer = {
   answer: string
 }
 
+export type AssistantMessageRole = 'user' | 'assistant'
+
+export type AssistantConversation = {
+  id: string
+  ownerId: string
+  title: string
+  createdAt?: unknown
+  updatedAt?: unknown
+}
+
+export type AssistantMessageRecord = {
+  id: string
+  conversationId: string
+  role: AssistantMessageRole
+  content: string
+  createdAt?: unknown
+}
+
+export type AskOwnerAssistantResult = AssistantAnswer & {
+  conversation: AssistantConversation
+  userMessage: AssistantMessageRecord
+  assistantMessage: AssistantMessageRecord
+}
+
 type Row = {
   id: string
   data: DocumentData
 }
+
+const conversationsCollection = collection(db, 'ai_conversations')
+const messagesCollection = collection(db, 'ai_messages')
 
 function normalizeQuestion(question: string) {
   return question
@@ -170,6 +201,43 @@ function getTimestamp(value: unknown) {
   return 0
 }
 
+function sortByUpdatedAtDesc(
+  left: Pick<AssistantConversation, 'updatedAt' | 'createdAt'>,
+  right: Pick<AssistantConversation, 'updatedAt' | 'createdAt'>,
+) {
+  const leftTime = getTimestamp(left.updatedAt) || getTimestamp(left.createdAt)
+  const rightTime = getTimestamp(right.updatedAt) || getTimestamp(right.createdAt)
+
+  return rightTime - leftTime
+}
+
+function sortByCreatedAtAsc(
+  left: Pick<AssistantMessageRecord, 'createdAt'>,
+  right: Pick<AssistantMessageRecord, 'createdAt'>,
+) {
+  return getTimestamp(left.createdAt) - getTimestamp(right.createdAt)
+}
+
+function mapConversation(id: string, data: DocumentData): AssistantConversation {
+  return {
+    id,
+    ownerId: String(data.ownerId ?? ''),
+    title: String(data.title ?? 'New Conversation'),
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  }
+}
+
+function mapMessage(id: string, data: DocumentData): AssistantMessageRecord {
+  return {
+    id,
+    conversationId: String(data.conversationId ?? ''),
+    role: data.role === 'user' ? 'user' : 'assistant',
+    content: String(data.content ?? ''),
+    createdAt: data.createdAt,
+  }
+}
+
 function isCurrentMonth(value: unknown) {
   const time = getTimestamp(value)
   if (!time) return false
@@ -209,6 +277,21 @@ function startOfToday() {
   today.setHours(0, 0, 0, 0)
 
   return today
+}
+
+function getConversationTitle(intent: AssistantIntent, question: string) {
+  const text = normalizeQuestion(question)
+
+  if (intent === 'monthly_revenue' || text.includes('revenue')) return 'Revenue Analysis'
+  if (intent === 'overdue_invoices' || text.includes('overdue')) return 'Overdue Invoices'
+  if (intent === 'feedback_summary' || text.includes('complaint')) return 'Tenant Complaints'
+  if (intent === 'room_availability') return 'Room Availability'
+  if (intent === 'expiring_contracts') return 'Expiring Contracts'
+  if (intent === 'urgent_feedback') return 'Feedback Review'
+  if (intent === 'utility_summary') return 'Utility Summary'
+  if (intent === 'tenant_count') return 'Tenant Overview'
+
+  return 'New Conversation'
 }
 
 function formatDueDate(value: unknown) {
@@ -427,13 +510,7 @@ async function answerTenantCount(ownerId: string) {
   return `You have ${tenants.length} tenant(s), including ${activeTenants.length} active tenant(s).`
 }
 
-export async function answerOwnerQuestion(
-  ownerId: string,
-  question: string,
-): Promise<AssistantAnswer> {
-  const intent = detectAssistantIntent(question)
-  console.log('AI Assistant question:', question)
-  console.log('Detected intent:', intent)
+async function generateOwnerAnswer(ownerId: string, intent: AssistantIntent) {
   let answer =
     "I can help with rooms, tenants, invoices, contracts, utilities, and feedback. Try asking: 'Which invoices are overdue?'"
 
@@ -445,6 +522,177 @@ export async function answerOwnerQuestion(
   if (intent === 'feedback_summary') answer = await answerFeedbackSummary(ownerId)
   if (intent === 'utility_summary') answer = await answerUtilitySummary(ownerId)
   if (intent === 'tenant_count') answer = await answerTenantCount(ownerId)
+
+  return answer
+}
+
+export async function getOwnerAIConversations(
+  ownerId: string,
+): Promise<AssistantConversation[]> {
+  try {
+    const snapshot = await getDocs(
+      query(
+        conversationsCollection,
+        where('ownerId', '==', ownerId),
+        orderBy('updatedAt', 'desc'),
+      ),
+    )
+
+    return snapshot.docs.map((item) => mapConversation(item.id, item.data()))
+  } catch (error) {
+    console.warn('Unable to load ordered AI conversations. Falling back to client sort.', error)
+    const snapshot = await getDocs(
+      query(conversationsCollection, where('ownerId', '==', ownerId)),
+    )
+
+    return snapshot.docs
+      .map((item) => mapConversation(item.id, item.data()))
+      .sort(sortByUpdatedAtDesc)
+  }
+}
+
+export async function getAssistantMessages(
+  conversationId: string,
+  pageSize = 50,
+): Promise<AssistantMessageRecord[]> {
+  try {
+    const snapshot = await getDocs(
+      query(
+        messagesCollection,
+        where('conversationId', '==', conversationId),
+        orderBy('createdAt', 'desc'),
+        limit(pageSize),
+      ),
+    )
+
+    return snapshot.docs
+      .map((item) => mapMessage(item.id, item.data()))
+      .sort(sortByCreatedAtAsc)
+  } catch (error) {
+    console.warn('Unable to load ordered AI messages. Falling back to client sort.', error)
+    const snapshot = await getDocs(
+      query(messagesCollection, where('conversationId', '==', conversationId)),
+    )
+
+    return snapshot.docs
+      .map((item) => mapMessage(item.id, item.data()))
+      .sort(sortByCreatedAtAsc)
+      .slice(-pageSize)
+  }
+}
+
+export async function createAssistantConversation(
+  ownerId: string,
+  title = 'New Conversation',
+): Promise<AssistantConversation> {
+  const documentRef = await addDoc(conversationsCollection, {
+    ownerId,
+    title,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  })
+
+  return {
+    id: documentRef.id,
+    ownerId,
+    title,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+export async function askOwnerAssistant({
+  ownerId,
+  question,
+  conversationId,
+  conversationTitle,
+}: {
+  ownerId: string
+  question: string
+  conversationId?: string | null
+  conversationTitle?: string
+}): Promise<AskOwnerAssistantResult> {
+  const trimmedQuestion = question.trim()
+  if (!trimmedQuestion) {
+    throw new Error('Question is required.')
+  }
+
+  const intent = detectAssistantIntent(trimmedQuestion)
+  console.log('AI Assistant question:', trimmedQuestion)
+  console.log('Detected intent:', intent)
+
+  let conversation: AssistantConversation
+
+  if (conversationId) {
+    conversation = {
+      id: conversationId,
+      ownerId,
+      title: conversationTitle || 'New Conversation',
+    }
+  } else {
+    conversation = await createAssistantConversation(
+      ownerId,
+      getConversationTitle(intent, trimmedQuestion),
+    )
+  }
+
+  const userMessageRef = await addDoc(messagesCollection, {
+    conversationId: conversation.id,
+    role: 'user',
+    content: trimmedQuestion,
+    createdAt: serverTimestamp(),
+  })
+  const answer = await generateOwnerAnswer(ownerId, intent)
+  const assistantMessageRef = await addDoc(messagesCollection, {
+    conversationId: conversation.id,
+    role: 'assistant',
+    content: answer,
+    createdAt: serverTimestamp(),
+  })
+  const updatedTitle = conversation.title === 'New Conversation'
+    ? getConversationTitle(intent, trimmedQuestion)
+    : conversation.title
+
+  await updateDoc(doc(db, 'ai_conversations', conversation.id), {
+    title: updatedTitle,
+    updatedAt: serverTimestamp(),
+  })
+
+  const updatedConversation = {
+    ...conversation,
+    title: updatedTitle,
+    updatedAt: new Date().toISOString(),
+  }
+
+  return {
+    intent,
+    answer,
+    conversation: updatedConversation,
+    userMessage: {
+      id: userMessageRef.id,
+      conversationId: conversation.id,
+      role: 'user',
+      content: trimmedQuestion,
+      createdAt: new Date().toISOString(),
+    },
+    assistantMessage: {
+      id: assistantMessageRef.id,
+      conversationId: conversation.id,
+      role: 'assistant',
+      content: answer,
+      createdAt: new Date().toISOString(),
+    },
+  }
+}
+
+export async function answerOwnerQuestion(
+  ownerId: string,
+  question: string,
+): Promise<AssistantAnswer> {
+  const intent = detectAssistantIntent(question)
+  console.log('AI Assistant question:', question)
+  console.log('Detected intent:', intent)
+  const answer = await generateOwnerAnswer(ownerId, intent)
 
   void addDoc(collection(db, 'aiAssistantLogs'), {
     ownerId,

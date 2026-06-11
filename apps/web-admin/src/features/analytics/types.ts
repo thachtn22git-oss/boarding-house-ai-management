@@ -103,6 +103,13 @@ export type AnalyticsData = {
     averageElectricityUsage: number
     averageWaterUsage: number
   }
+  aiUsage: {
+    totalQuestions: number
+    totalConversations: number
+    questionsToday: number
+    averageQuestionsPerConversation: number
+    mostAskedQuestionTypes: ChartPoint[]
+  }
   topRooms: TopRoomAnalytics[]
   exports: {
     revenue: Array<Record<string, string | number>>

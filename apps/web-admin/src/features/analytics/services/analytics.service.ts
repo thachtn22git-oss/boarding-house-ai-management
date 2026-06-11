@@ -6,6 +6,7 @@ import {
 } from 'firebase/firestore'
 
 import { db } from '../../../config/firebase'
+import { detectAssistantIntent } from '../../ai-assistant/services/ai-assistant.service'
 import type {
   AnalyticsData,
   AnalyticsScope,
@@ -23,6 +24,8 @@ type AnalyticsCollectionKey =
   | 'invoices'
   | 'utilityReadings'
   | 'feedbacks'
+  | 'ai_conversations'
+  | 'ai_messages'
 
 type AnalyticsCollections = Record<
   AnalyticsCollectionKey,
@@ -36,6 +39,8 @@ const analyticsCollections: AnalyticsCollectionKey[] = [
   'invoices',
   'utilityReadings',
   'feedbacks',
+  'ai_conversations',
+  'ai_messages',
 ]
 
 function getTimestampValue(value: unknown) {
@@ -174,6 +179,20 @@ function isCurrentMonth(value: unknown) {
   const now = new Date()
 
   return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()
+}
+
+function isToday(value: unknown) {
+  const timestamp = getTimestampValue(value)
+  if (!timestamp) return false
+
+  const date = new Date(timestamp)
+  const now = new Date()
+
+  return (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  )
 }
 
 function isContractExpiringSoon(data: DocumentData) {
@@ -465,6 +484,47 @@ function getTenantAnalytics(tenants: Array<{ id: string; data: DocumentData }>) 
   }
 }
 
+function getQuestionTypeLabel(content: unknown) {
+  const intent = detectAssistantIntent(String(content ?? ''))
+
+  if (intent === 'monthly_revenue') return 'Revenue'
+  if (intent === 'overdue_invoices') return 'Invoices'
+  if (intent === 'expiring_contracts') return 'Contracts'
+  if (intent === 'room_availability') return 'Rooms'
+  if (intent === 'urgent_feedback' || intent === 'feedback_summary') return 'Feedback'
+  if (intent === 'utility_summary') return 'Utilities'
+
+  return null
+}
+
+function getAIUsageAnalytics(
+  conversations: Array<{ id: string; data: DocumentData }>,
+  messages: Array<{ id: string; data: DocumentData }>,
+) {
+  const userMessages = messages.filter((message) => message.data.role === 'user')
+  const questionTypes = ['Revenue', 'Invoices', 'Contracts', 'Rooms', 'Feedback', 'Utilities']
+  const typeCounts = new Map(questionTypes.map((label) => [label, 0]))
+
+  userMessages.forEach((message) => {
+    const label = getQuestionTypeLabel(message.data.content)
+    if (!label) return
+
+    typeCounts.set(label, (typeCounts.get(label) ?? 0) + 1)
+  })
+
+  return {
+    totalQuestions: userMessages.length,
+    totalConversations: conversations.length,
+    questionsToday: userMessages.filter((message) => isToday(message.data.createdAt)).length,
+    averageQuestionsPerConversation:
+      conversations.length > 0 ? userMessages.length / conversations.length : 0,
+    mostAskedQuestionTypes: questionTypes.map((label) => ({
+      label,
+      value: typeCounts.get(label) ?? 0,
+    })),
+  }
+}
+
 function getTopRooms(
   rooms: Array<{ id: string; data: DocumentData }>,
   contracts: Array<{ id: string; data: DocumentData }>,
@@ -507,6 +567,25 @@ function buildAnalyticsData(
   const tenants = toRows(collections.tenants, scope, filter)
   const feedbacks = toRows(collections.feedbacks, scope, filter)
   const utilities = toRows(collections.utilityReadings, scope, filter)
+  const scopedAIConversations = filterByScope(collections.ai_conversations, scope).map(
+    (documentSnapshot) => ({
+      id: documentSnapshot.id,
+      data: documentSnapshot.data(),
+    }),
+  )
+  const scopedAIConversationIds = new Set(
+    scopedAIConversations.map((conversation) => conversation.id),
+  )
+  const aiConversations = scopedAIConversations.filter((conversation) =>
+    isWithinRange(conversation.data, filter),
+  )
+  const aiMessages = collections.ai_messages
+    .map((documentSnapshot) => ({
+      id: documentSnapshot.id,
+      data: documentSnapshot.data(),
+    }))
+    .filter((message) => scopedAIConversationIds.has(String(message.data.conversationId ?? '')))
+    .filter((message) => isWithinRange(message.data, filter))
   const revenue = getRevenueAnalytics(invoices)
   const occupancy = getOccupancyAnalytics(rooms)
   const contractAnalytics = getContractAnalytics(contracts)
@@ -514,6 +593,7 @@ function buildAnalyticsData(
   const tenantAnalytics = getTenantAnalytics(tenants)
   const feedbackAnalytics = getFeedbackAnalytics(feedbacks)
   const utilityAnalytics = getUtilityAnalytics(utilities)
+  const aiUsageAnalytics = getAIUsageAnalytics(aiConversations, aiMessages)
   const topRooms = getTopRooms(rooms, contracts, invoices)
   const satisfactionTotal =
     feedbackAnalytics.positive + feedbackAnalytics.neutral + feedbackAnalytics.negative
@@ -534,6 +614,7 @@ function buildAnalyticsData(
     tenants: tenantAnalytics,
     feedback: feedbackAnalytics,
     utilities: utilityAnalytics,
+    aiUsage: aiUsageAnalytics,
     topRooms,
     exports: {
       revenue: revenue.monthly.map((row) => ({
@@ -583,6 +664,8 @@ export async function getAnalyticsData(
       invoices: [],
       utilityReadings: [],
       feedbacks: [],
+      ai_conversations: [],
+      ai_messages: [],
     } as AnalyticsCollections,
   )
 
