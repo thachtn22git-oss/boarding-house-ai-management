@@ -83,6 +83,12 @@ function sortRooms(rooms: ChatRoom[]) {
   })
 }
 
+function createRealtimeChannelName(prefix: string, id: string) {
+  const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '_')
+
+  return `${prefix}_${safeId}_${Date.now()}_${Math.random().toString(36).slice(2)}`
+}
+
 async function listRooms(userId: string) {
   const client = ensureSupabase()
   if (!client) return []
@@ -104,7 +110,10 @@ export function subscribeToUserChatRooms(
   onError?: (error: unknown) => void,
 ) {
   const client = ensureSupabase()
-  if (!client) return firestoreChat.subscribeToUserChatRooms(userId, callback, onError)
+  if (!client) {
+    callback([])
+    return () => undefined
+  }
 
   let active = true
   const load = () => {
@@ -118,9 +127,18 @@ export function subscribeToUserChatRooms(
   load()
 
   const channel = client
-    .channel(`mobile_chat_rooms_${userId}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_rooms' }, load)
-    .subscribe()
+    .channel(createRealtimeChannelName('mobile_chat_rooms', userId))
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'chat_rooms' },
+      load,
+    )
+    .subscribe((status, error) => {
+      if (error) onError?.(error)
+      if (status === 'CHANNEL_ERROR') {
+        onError?.(new Error('Unable to subscribe to chat rooms.'))
+      }
+    })
 
   return () => {
     active = false
@@ -149,7 +167,10 @@ export function subscribeToChatMessages(
   onError?: (error: unknown) => void,
 ) {
   const client = ensureSupabase()
-  if (!client) return firestoreChat.subscribeToChatMessages(chatRoomId, callback, onError)
+  if (!client) {
+    callback([])
+    return () => undefined
+  }
 
   let active = true
   const load = () => {
@@ -163,7 +184,7 @@ export function subscribeToChatMessages(
   load()
 
   const channel = client
-    .channel(`mobile_chat_messages_${chatRoomId}`)
+    .channel(createRealtimeChannelName('mobile_chat_messages', chatRoomId))
     .on(
       'postgres_changes',
       {
@@ -174,7 +195,12 @@ export function subscribeToChatMessages(
       },
       load,
     )
-    .subscribe()
+    .subscribe((status, error) => {
+      if (error) onError?.(error)
+      if (status === 'CHANNEL_ERROR') {
+        onError?.(new Error('Unable to subscribe to chat messages.'))
+      }
+    })
 
   return () => {
     active = false
