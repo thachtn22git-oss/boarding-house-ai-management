@@ -8,7 +8,7 @@ import {
   getPortalLabelForRole,
 } from '../../config/navigation'
 import { useAuth } from '../../features/auth/useAuth'
-import { subscribeToUserChatRooms } from '../../features/chat/services/chat.service'
+import { subscribeToUserChatRooms } from '../../features/chat/services/supabase-chat.service'
 import NotificationBell from '../notifications/NotificationBell'
 import './AdminLayout.css'
 

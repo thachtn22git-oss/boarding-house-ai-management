@@ -279,7 +279,7 @@ function startOfToday() {
   return today
 }
 
-function getConversationTitle(intent: AssistantIntent, question: string) {
+export function getAssistantConversationTitle(intent: AssistantIntent, question: string) {
   const text = normalizeQuestion(question)
 
   if (intent === 'monthly_revenue' || text.includes('revenue')) return 'Revenue Analysis'
@@ -632,7 +632,7 @@ export async function askOwnerAssistant({
   } else {
     conversation = await createAssistantConversation(
       ownerId,
-      getConversationTitle(intent, trimmedQuestion),
+      getAssistantConversationTitle(intent, trimmedQuestion),
     )
   }
 
@@ -650,7 +650,7 @@ export async function askOwnerAssistant({
     createdAt: serverTimestamp(),
   })
   const updatedTitle = conversation.title === 'New Conversation'
-    ? getConversationTitle(intent, trimmedQuestion)
+    ? getAssistantConversationTitle(intent, trimmedQuestion)
     : conversation.title
 
   await updateDoc(doc(db, 'ai_conversations', conversation.id), {
@@ -703,6 +703,18 @@ export async function answerOwnerQuestion(
   }).catch((error) => {
     console.warn('Unable to save AI assistant log.', error)
   })
+
+  return { intent, answer }
+}
+
+export async function generateOwnerAssistantAnswer(
+  ownerId: string,
+  question: string,
+): Promise<AssistantAnswer> {
+  const intent = detectAssistantIntent(question)
+  console.log('AI Assistant question:', question)
+  console.log('Detected intent:', intent)
+  const answer = await generateOwnerAnswer(ownerId, intent)
 
   return { intent, answer }
 }

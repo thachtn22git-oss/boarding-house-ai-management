@@ -6,7 +6,7 @@ import {
 } from 'firebase/firestore'
 
 import { db } from '../../../config/firebase'
-import { detectAssistantIntent } from '../../ai-assistant/services/ai-assistant.service'
+import { isSupabaseConfigured, supabase } from '../../../lib/supabase'
 import type {
   AnalyticsData,
   AnalyticsScope,
@@ -24,8 +24,6 @@ type AnalyticsCollectionKey =
   | 'invoices'
   | 'utilityReadings'
   | 'feedbacks'
-  | 'ai_conversations'
-  | 'ai_messages'
 
 type AnalyticsCollections = Record<
   AnalyticsCollectionKey,
@@ -39,8 +37,6 @@ const analyticsCollections: AnalyticsCollectionKey[] = [
   'invoices',
   'utilityReadings',
   'feedbacks',
-  'ai_conversations',
-  'ai_messages',
 ]
 
 function getTimestampValue(value: unknown) {
@@ -484,45 +480,103 @@ function getTenantAnalytics(tenants: Array<{ id: string; data: DocumentData }>) 
   }
 }
 
-function getQuestionTypeLabel(content: unknown) {
-  const intent = detectAssistantIntent(String(content ?? ''))
+function getQuestionTypeLabel(intent: unknown) {
+  if (intent === 'monthly_revenue') return 'revenue'
+  if (intent === 'overdue_invoices') return 'invoices'
+  if (intent === 'expiring_contracts') return 'contracts'
+  if (intent === 'room_availability') return 'rooms'
+  if (intent === 'urgent_feedback' || intent === 'feedback_summary') return 'feedback'
+  if (intent === 'utility_summary') return 'utilities'
 
-  if (intent === 'monthly_revenue') return 'Revenue'
-  if (intent === 'overdue_invoices') return 'Invoices'
-  if (intent === 'expiring_contracts') return 'Contracts'
-  if (intent === 'room_availability') return 'Rooms'
-  if (intent === 'urgent_feedback' || intent === 'feedback_summary') return 'Feedback'
-  if (intent === 'utility_summary') return 'Utilities'
-
-  return null
+  return 'unknown'
 }
 
-function getAIUsageAnalytics(
-  conversations: Array<{ id: string; data: DocumentData }>,
-  messages: Array<{ id: string; data: DocumentData }>,
+function buildAIUsageAnalytics(
+  totalConversations: number,
+  usageLogs: Array<{ intent?: unknown; created_at?: unknown }>,
 ) {
-  const userMessages = messages.filter((message) => message.data.role === 'user')
-  const questionTypes = ['Revenue', 'Invoices', 'Contracts', 'Rooms', 'Feedback', 'Utilities']
+  const questionTypes = ['revenue', 'invoices', 'contracts', 'rooms', 'feedback', 'utilities', 'unknown']
   const typeCounts = new Map(questionTypes.map((label) => [label, 0]))
 
-  userMessages.forEach((message) => {
-    const label = getQuestionTypeLabel(message.data.content)
-    if (!label) return
-
+  usageLogs.forEach((message) => {
+    const label = getQuestionTypeLabel(message.intent)
     typeCounts.set(label, (typeCounts.get(label) ?? 0) + 1)
   })
 
   return {
-    totalQuestions: userMessages.length,
-    totalConversations: conversations.length,
-    questionsToday: userMessages.filter((message) => isToday(message.data.createdAt)).length,
+    supabaseConfigured: true,
+    totalQuestions: usageLogs.length,
+    totalConversations,
+    questionsToday: usageLogs.filter((message) => isToday(message.created_at)).length,
     averageQuestionsPerConversation:
-      conversations.length > 0 ? userMessages.length / conversations.length : 0,
+      totalConversations > 0 ? usageLogs.length / totalConversations : 0,
     mostAskedQuestionTypes: questionTypes.map((label) => ({
-      label,
+      label: formatDistributionLabel(label),
       value: typeCounts.get(label) ?? 0,
     })),
   }
+}
+
+function emptyAIUsageAnalytics(supabaseConfigured: boolean) {
+  return {
+    supabaseConfigured,
+    totalQuestions: 0,
+    totalConversations: 0,
+    questionsToday: 0,
+    averageQuestionsPerConversation: 0,
+    mostAskedQuestionTypes: ['revenue', 'invoices', 'contracts', 'rooms', 'feedback', 'utilities', 'unknown'].map((label) => ({
+      label: formatDistributionLabel(label),
+      value: 0,
+    })),
+  }
+}
+
+async function getAIUsageFromSupabase(
+  scope: AnalyticsScope,
+  filter: DateRangeFilter,
+) {
+  if (!supabase || !isSupabaseConfigured) {
+    return emptyAIUsageAnalytics(false)
+  }
+
+  const { start, end } = getRangeBounds(filter)
+  let conversationsQuery = supabase
+    .from('ai_conversations')
+    .select('id, owner_id, created_at, updated_at')
+  let logsQuery = supabase
+    .from('ai_usage_logs')
+    .select('id, owner_id, intent, created_at')
+
+  if (scope.type === 'owner' && scope.ownerId) {
+    conversationsQuery = conversationsQuery.eq('owner_id', scope.ownerId)
+    logsQuery = logsQuery.eq('owner_id', scope.ownerId)
+  }
+
+  if (filter.preset !== 'all') {
+    if (start) {
+      conversationsQuery = conversationsQuery.gte('created_at', start.toISOString())
+      logsQuery = logsQuery.gte('created_at', start.toISOString())
+    }
+
+    if (end) {
+      const inclusiveEnd = new Date(end.getTime() + 86_399_999)
+      conversationsQuery = conversationsQuery.lte('created_at', inclusiveEnd.toISOString())
+      logsQuery = logsQuery.lte('created_at', inclusiveEnd.toISOString())
+    }
+  }
+
+  const [conversationResult, logResult] = await Promise.all([
+    conversationsQuery,
+    logsQuery,
+  ])
+
+  if (conversationResult.error) throw conversationResult.error
+  if (logResult.error) throw logResult.error
+
+  return buildAIUsageAnalytics(
+    conversationResult.data?.length ?? 0,
+    (logResult.data ?? []) as Array<{ intent?: unknown; created_at?: unknown }>,
+  )
 }
 
 function getTopRooms(
@@ -557,6 +611,7 @@ function buildAnalyticsData(
   collections: AnalyticsCollections,
   scope: AnalyticsScope,
   filter: DateRangeFilter,
+  aiUsageAnalytics: AnalyticsData['aiUsage'],
 ): AnalyticsData {
   const rooms = filterByScope(collections.rooms, scope).map((documentSnapshot) => ({
     id: documentSnapshot.id,
@@ -567,25 +622,6 @@ function buildAnalyticsData(
   const tenants = toRows(collections.tenants, scope, filter)
   const feedbacks = toRows(collections.feedbacks, scope, filter)
   const utilities = toRows(collections.utilityReadings, scope, filter)
-  const scopedAIConversations = filterByScope(collections.ai_conversations, scope).map(
-    (documentSnapshot) => ({
-      id: documentSnapshot.id,
-      data: documentSnapshot.data(),
-    }),
-  )
-  const scopedAIConversationIds = new Set(
-    scopedAIConversations.map((conversation) => conversation.id),
-  )
-  const aiConversations = scopedAIConversations.filter((conversation) =>
-    isWithinRange(conversation.data, filter),
-  )
-  const aiMessages = collections.ai_messages
-    .map((documentSnapshot) => ({
-      id: documentSnapshot.id,
-      data: documentSnapshot.data(),
-    }))
-    .filter((message) => scopedAIConversationIds.has(String(message.data.conversationId ?? '')))
-    .filter((message) => isWithinRange(message.data, filter))
   const revenue = getRevenueAnalytics(invoices)
   const occupancy = getOccupancyAnalytics(rooms)
   const contractAnalytics = getContractAnalytics(contracts)
@@ -593,7 +629,6 @@ function buildAnalyticsData(
   const tenantAnalytics = getTenantAnalytics(tenants)
   const feedbackAnalytics = getFeedbackAnalytics(feedbacks)
   const utilityAnalytics = getUtilityAnalytics(utilities)
-  const aiUsageAnalytics = getAIUsageAnalytics(aiConversations, aiMessages)
   const topRooms = getTopRooms(rooms, contracts, invoices)
   const satisfactionTotal =
     feedbackAnalytics.positive + feedbackAnalytics.neutral + feedbackAnalytics.negative
@@ -664,10 +699,10 @@ export async function getAnalyticsData(
       invoices: [],
       utilityReadings: [],
       feedbacks: [],
-      ai_conversations: [],
-      ai_messages: [],
     } as AnalyticsCollections,
   )
 
-  return buildAnalyticsData(collections, scope, filter)
+  const aiUsage = await getAIUsageFromSupabase(scope, filter)
+
+  return buildAnalyticsData(collections, scope, filter, aiUsage)
 }

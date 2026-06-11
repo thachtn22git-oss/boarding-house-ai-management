@@ -2,13 +2,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useAuth } from '../../auth/useAuth'
 import {
-  askOwnerAssistant,
-  createAssistantConversation,
-  getAssistantMessages,
-  getOwnerAIConversations,
+  generateOwnerAssistantAnswer,
+  getAssistantConversationTitle,
   type AssistantConversation,
   type AssistantMessageRecord,
 } from '../services/ai-assistant.service'
+import {
+  createConversation,
+  getConversationMessages,
+  isSupabaseConfigured,
+  listConversations,
+  logAIUsage,
+  saveAssistantMessage,
+  saveUserMessage,
+  touchConversation,
+  updateConversationTitle,
+} from '../services/ai-history.service'
 import './AiAssistantPage.css'
 
 const suggestedQuestions = [
@@ -56,6 +65,32 @@ function formatRelativeTime(value: unknown) {
   }).format(new Date(time))
 }
 
+function createLocalConversation(ownerId: string, title = 'New Conversation'): AssistantConversation {
+  const now = new Date().toISOString()
+
+  return {
+    id: `local-${Date.now()}-${Math.random()}`,
+    ownerId,
+    title,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+function createLocalMessage(
+  conversationId: string,
+  role: 'user' | 'assistant',
+  content: string,
+): AssistantMessageRecord {
+  return {
+    id: `${role}-${Date.now()}-${Math.random()}`,
+    conversationId,
+    role,
+    content,
+    createdAt: new Date().toISOString(),
+  }
+}
+
 function AiAssistantPage() {
   const { currentUser } = useAuth()
   const [conversations, setConversations] = useState<AssistantConversation[]>([])
@@ -92,7 +127,12 @@ function AiAssistantPage() {
     setError('')
 
     try {
-      const nextConversations = await getOwnerAIConversations(currentUser.uid)
+      if (!isSupabaseConfigured) {
+        setLoadingConversations(false)
+        return
+      }
+
+      const nextConversations = await listConversations(currentUser.uid)
       setConversations(nextConversations)
       setSelectedConversation((current) => {
         if (current && nextConversations.some((item) => item.id === current.id)) {
@@ -119,7 +159,12 @@ function AiAssistantPage() {
     setError('')
 
     try {
-      const nextMessages = await getAssistantMessages(selectedConversationId)
+      if (!isSupabaseConfigured) {
+        setLoadingMessages(false)
+        return
+      }
+
+      const nextMessages = await getConversationMessages(selectedConversationId, currentUser?.uid ?? '')
       setMessages(nextMessages)
       scrollToBottom()
     } catch (loadError) {
@@ -128,7 +173,7 @@ function AiAssistantPage() {
     } finally {
       setLoadingMessages(false)
     }
-  }, [scrollToBottom, selectedConversationId])
+  }, [currentUser?.uid, scrollToBottom, selectedConversationId])
 
   useEffect(() => {
     void loadConversations()
@@ -148,7 +193,10 @@ function AiAssistantPage() {
     setError('')
 
     try {
-      const conversation = await createAssistantConversation(currentUser.uid)
+      const conversation = isSupabaseConfigured
+        ? await createConversation(currentUser.uid)
+        : createLocalConversation(currentUser.uid)
+      if (!conversation) return
       setConversations((current) => [conversation, ...current])
       setSelectedConversation(conversation)
       setMessages([])
@@ -172,19 +220,61 @@ function AiAssistantPage() {
     setError('')
 
     try {
-      const result = await askOwnerAssistant({
-        ownerId: currentUser.uid,
-        question: trimmedQuestion,
-        conversationId: selectedConversation?.id,
-        conversationTitle: selectedConversation?.title,
-      })
+      const result = await generateOwnerAssistantAnswer(currentUser.uid, trimmedQuestion)
+      let conversation = selectedConversation
 
-      setSelectedConversation(result.conversation)
-      setMessages((current) => [...current, result.userMessage, result.assistantMessage])
+      if (!conversation) {
+        const title = getAssistantConversationTitle(result.intent, trimmedQuestion)
+        conversation = isSupabaseConfigured
+          ? await createConversation(currentUser.uid, title)
+          : createLocalConversation(currentUser.uid, title)
+      }
+
+      if (!conversation) {
+        throw new Error('Unable to create AI conversation.')
+      }
+
+      const nextTitle = conversation.title === 'New Conversation'
+        ? getAssistantConversationTitle(result.intent, trimmedQuestion)
+        : conversation.title
+      const userMessage = isSupabaseConfigured
+        ? await saveUserMessage(conversation.id, currentUser.uid, trimmedQuestion, result.intent)
+        : createLocalMessage(conversation.id, 'user', trimmedQuestion)
+      const assistantMessage = isSupabaseConfigured
+        ? await saveAssistantMessage(conversation.id, currentUser.uid, result.answer, result.intent)
+        : createLocalMessage(conversation.id, 'assistant', result.answer)
+
+      if (!userMessage || !assistantMessage) {
+        throw new Error('Unable to save AI messages.')
+      }
+
+      let updatedConversation: AssistantConversation = {
+        ...conversation,
+        title: nextTitle,
+        updatedAt: new Date().toISOString(),
+      }
+
+      if (isSupabaseConfigured) {
+        updatedConversation =
+          (await updateConversationTitle(conversation.id, currentUser.uid, nextTitle)) ??
+          updatedConversation
+        updatedConversation =
+          (await touchConversation(conversation.id, currentUser.uid)) ?? updatedConversation
+        await logAIUsage(
+          currentUser.uid,
+          conversation.id,
+          trimmedQuestion,
+          result.intent,
+          result.answer.slice(0, 240),
+        )
+      }
+
+      setSelectedConversation(updatedConversation)
+      setMessages((current) => [...current, userMessage, assistantMessage])
       setConversations((current) => {
-        const withoutCurrent = current.filter((item) => item.id !== result.conversation.id)
+        const withoutCurrent = current.filter((item) => item.id !== updatedConversation.id)
 
-        return [result.conversation, ...withoutCurrent]
+        return [updatedConversation, ...withoutCurrent]
       })
     } catch (submitError) {
       console.error('Unable to answer AI Assistant question.', submitError)

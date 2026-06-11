@@ -21,7 +21,7 @@ import {
   sendChatMessage,
   subscribeToChatMessages,
   subscribeToUserChatRooms,
-} from '../../services/chat.service'
+} from './services/supabase-chat.service'
 
 interface ChatScreenProps {
   initialRoomId?: string

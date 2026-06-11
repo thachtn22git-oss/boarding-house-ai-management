@@ -324,6 +324,9 @@ function AnalyticsPage() {
         title="AI Usage"
         description="Real assistant usage based on saved AI conversations and user questions."
       >
+        {!data.aiUsage.supabaseConfigured ? (
+          <div className="room-empty-state">AI usage analytics requires Supabase configuration.</div>
+        ) : null}
         <div className="stats-grid">
           <StatCard
             label="Total AI Questions"

@@ -104,6 +104,7 @@ export type AnalyticsData = {
     averageWaterUsage: number
   }
   aiUsage: {
+    supabaseConfigured: boolean
     totalQuestions: number
     totalConversations: number
     questionsToday: number

@@ -21,7 +21,7 @@ import {
   sendMessage,
   subscribeToChatMessages,
   subscribeToUserChatRooms,
-} from '../services/chat.service'
+} from '../services/supabase-chat.service'
 import type { ChatContact, ChatMessage, ChatRoom } from '../types'
 
 function ChatPage() {

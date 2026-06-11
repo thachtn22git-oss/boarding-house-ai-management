@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../providers/AuthProvider'
-import { subscribeToUserChatRooms } from '../../services/chat.service'
+import { subscribeToUserChatRooms } from './services/supabase-chat.service'
 
 export function useChatUnreadCount() {
   const { currentUser } = useAuth()

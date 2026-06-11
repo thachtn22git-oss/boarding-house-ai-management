@@ -1,17 +1,14 @@
 import {
   addDoc,
   collection,
-  doc,
   getDocs,
-  limit,
-  orderBy,
   query,
   serverTimestamp,
-  updateDoc,
   where,
   type DocumentData,
 } from 'firebase/firestore'
 import { db } from '../../config/firebase'
+import { isSupabaseConfigured, supabase } from '../../lib/supabase'
 import { formatCurrency } from '../../utils/format'
 
 export type AssistantIntent =
@@ -47,9 +44,6 @@ type Row = {
   id: string
   data: DocumentData
 }
-
-const conversationsCollection = collection(db, 'ai_conversations')
-const messagesCollection = collection(db, 'ai_messages')
 
 function normalizeQuestion(question: string) {
   return question
@@ -243,46 +237,82 @@ async function generateOwnerAnswer(ownerId: string, intent: AssistantIntent) {
 }
 
 export async function getOwnerAIConversations(ownerId: string): Promise<AssistantConversation[]> {
-  try {
-    const snapshot = await getDocs(query(conversationsCollection, where('ownerId', '==', ownerId), orderBy('updatedAt', 'desc')))
-
-    return snapshot.docs.map((item) => mapConversation(item.id, item.data()))
-  } catch (error) {
-    console.warn('Unable to load ordered AI conversations. Falling back to client sort.', error)
-    const snapshot = await getDocs(query(conversationsCollection, where('ownerId', '==', ownerId)))
-
-    return snapshot.docs.map((item) => mapConversation(item.id, item.data())).sort(sortConversations)
+  if (!supabase || !isSupabaseConfigured) {
+    console.warn('Supabase is not configured. AI history and chat persistence are disabled.')
+    return []
   }
+
+  const { data, error } = await supabase
+    .from('ai_conversations')
+    .select('*')
+    .eq('owner_id', ownerId)
+    .order('updated_at', { ascending: false })
+
+  if (error) throw error
+
+  return (data ?? []).map((item) =>
+    mapConversation(item.id, {
+      ownerId: item.owner_id,
+      title: item.title,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at,
+    }),
+  )
 }
 
 export async function getAssistantMessages(conversationId: string, pageSize = 50): Promise<AssistantMessageRecord[]> {
-  try {
-    const snapshot = await getDocs(query(messagesCollection, where('conversationId', '==', conversationId), orderBy('createdAt', 'desc'), limit(pageSize)))
-
-    return snapshot.docs.map((item) => mapMessage(item.id, item.data())).sort(sortMessages)
-  } catch (error) {
-    console.warn('Unable to load ordered AI messages. Falling back to client sort.', error)
-    const snapshot = await getDocs(query(messagesCollection, where('conversationId', '==', conversationId)))
-
-    return snapshot.docs.map((item) => mapMessage(item.id, item.data())).sort(sortMessages).slice(-pageSize)
+  if (!supabase || !isSupabaseConfigured) {
+    console.warn('Supabase is not configured. AI history and chat persistence are disabled.')
+    return []
   }
+
+  const { data, error } = await supabase
+    .from('ai_messages')
+    .select('*')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: true })
+    .limit(pageSize)
+
+  if (error) throw error
+
+  return (data ?? []).map((item) =>
+    mapMessage(item.id, {
+      conversationId: item.conversation_id,
+      role: item.role,
+      content: item.content,
+      createdAt: item.created_at,
+    }),
+  )
 }
 
 export async function createAssistantConversation(ownerId: string, title = 'New Conversation') {
-  const documentRef = await addDoc(conversationsCollection, {
-    ownerId,
-    title,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  })
+  if (!supabase || !isSupabaseConfigured) {
+    console.warn('Supabase is not configured. AI history and chat persistence are disabled.')
+    const now = new Date().toISOString()
 
-  return {
-    id: documentRef.id,
-    ownerId,
-    title,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    return {
+      id: `local-${Date.now()}-${Math.random()}`,
+      ownerId,
+      title,
+      createdAt: now,
+      updatedAt: now,
+    }
   }
+
+  const { data, error } = await supabase
+    .from('ai_conversations')
+    .insert({ owner_id: ownerId, title })
+    .select('*')
+    .single()
+
+  if (error) throw error
+
+  return mapConversation(data.id, {
+    ownerId: data.owner_id,
+    title: data.title,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  })
 }
 
 export async function askOwnerAssistant({
@@ -308,25 +338,83 @@ export async function askOwnerAssistant({
       }
     : await createAssistantConversation(ownerId, getConversationTitle(intent, trimmedQuestion))
 
-  const userMessageRef = await addDoc(messagesCollection, {
-    conversationId: conversation.id,
-    role: 'user',
-    content: trimmedQuestion,
-    createdAt: serverTimestamp(),
-  })
   const answer = await generateOwnerAnswer(ownerId, intent)
-  const assistantMessageRef = await addDoc(messagesCollection, {
-    conversationId: conversation.id,
-    role: 'assistant',
-    content: answer,
-    createdAt: serverTimestamp(),
-  })
   const title = conversation.title === 'New Conversation' ? getConversationTitle(intent, trimmedQuestion) : conversation.title
 
-  await updateDoc(doc(db, 'ai_conversations', conversation.id), {
-    title,
-    updatedAt: serverTimestamp(),
-  })
+  let userMessage: AssistantMessageRecord
+  let assistantMessage: AssistantMessageRecord
+
+  if (supabase && isSupabaseConfigured) {
+    const [userResult, assistantResult] = await Promise.all([
+      supabase
+        .from('ai_messages')
+        .insert({
+          conversation_id: conversation.id,
+          owner_id: ownerId,
+          role: 'user',
+          content: trimmedQuestion,
+          intent,
+        })
+        .select('*')
+        .single(),
+      supabase
+        .from('ai_messages')
+        .insert({
+          conversation_id: conversation.id,
+          owner_id: ownerId,
+          role: 'assistant',
+          content: answer,
+          intent,
+        })
+        .select('*')
+        .single(),
+    ])
+
+    if (userResult.error) throw userResult.error
+    if (assistantResult.error) throw assistantResult.error
+
+    userMessage = mapMessage(userResult.data.id, {
+      conversationId: userResult.data.conversation_id,
+      role: userResult.data.role,
+      content: userResult.data.content,
+      createdAt: userResult.data.created_at,
+    })
+    assistantMessage = mapMessage(assistantResult.data.id, {
+      conversationId: assistantResult.data.conversation_id,
+      role: assistantResult.data.role,
+      content: assistantResult.data.content,
+      createdAt: assistantResult.data.created_at,
+    })
+
+    const now = new Date().toISOString()
+    await supabase
+      .from('ai_conversations')
+      .update({ title, updated_at: now })
+      .eq('id', conversation.id)
+      .eq('owner_id', ownerId)
+    await supabase.from('ai_usage_logs').insert({
+      owner_id: ownerId,
+      conversation_id: conversation.id,
+      question: trimmedQuestion,
+      intent,
+      answer_preview: answer.slice(0, 240),
+    })
+  } else {
+    userMessage = {
+      id: `user-${Date.now()}-${Math.random()}`,
+      conversationId: conversation.id,
+      role: 'user',
+      content: trimmedQuestion,
+      createdAt: new Date().toISOString(),
+    }
+    assistantMessage = {
+      id: `assistant-${Date.now()}-${Math.random()}`,
+      conversationId: conversation.id,
+      role: 'assistant',
+      content: answer,
+      createdAt: new Date().toISOString(),
+    }
+  }
 
   conversation = {
     ...conversation,
@@ -338,20 +426,8 @@ export async function askOwnerAssistant({
     intent,
     answer,
     conversation,
-    userMessage: {
-      id: userMessageRef.id,
-      conversationId: conversation.id,
-      role: 'user' as const,
-      content: trimmedQuestion,
-      createdAt: new Date().toISOString(),
-    },
-    assistantMessage: {
-      id: assistantMessageRef.id,
-      conversationId: conversation.id,
-      role: 'assistant' as const,
-      content: answer,
-      createdAt: new Date().toISOString(),
-    },
+    userMessage,
+    assistantMessage,
   }
 }
 
