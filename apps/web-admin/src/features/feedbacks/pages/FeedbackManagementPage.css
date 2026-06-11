@@ -188,6 +188,39 @@
   gap: 10px;
 }
 
+.feedback-analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.feedback-analysis-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #f8fafc;
+}
+
+.feedback-analysis-card span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.feedback-analysis-card strong {
+  width: max-content;
+}
+
+.feedback-analysis-card p {
+  margin: 0;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .feedback-confidence-row {
   display: grid;
   grid-template-columns: 90px minmax(120px, 1fr) 80px;
@@ -221,7 +254,8 @@
 
 @media (max-width: 900px) {
   .feedback-filter-card,
-  .feedback-form {
+  .feedback-form,
+  .feedback-analysis-grid {
     grid-template-columns: 1fr;
   }
 }

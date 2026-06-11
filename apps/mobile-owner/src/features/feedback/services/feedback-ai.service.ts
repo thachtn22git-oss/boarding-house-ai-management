@@ -106,7 +106,7 @@ export async function analyzeFeedbackWithAI(
       'Feedback AI analysis failed. If testing Expo Go on a phone, set EXPO_PUBLIC_AI_SERVER_URL to your computer LAN IP.',
       error,
     )
-    throw new Error('AI analysis unavailable')
+    throw new Error('AI server is unavailable.')
   } finally {
     clearTimeout(timeoutId)
   }

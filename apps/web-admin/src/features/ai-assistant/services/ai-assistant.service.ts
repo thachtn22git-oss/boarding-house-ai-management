@@ -1,0 +1,381 @@
+import {
+  addDoc,
+  collection,
+  getDocs,
+  query,
+  serverTimestamp,
+  where,
+  type DocumentData,
+} from 'firebase/firestore'
+
+import { db } from '../../../config/firebase'
+import { formatCurrency } from '../../../utils/format'
+
+export type AssistantIntent =
+  | 'room_availability'
+  | 'monthly_revenue'
+  | 'overdue_invoices'
+  | 'expiring_contracts'
+  | 'urgent_feedback'
+  | 'feedback_summary'
+  | 'utility_summary'
+  | 'tenant_count'
+  | 'unknown'
+
+export type AssistantAnswer = {
+  intent: AssistantIntent
+  answer: string
+}
+
+type Row = {
+  id: string
+  data: DocumentData
+}
+
+function normalizeQuestion(question: string) {
+  return question.toLowerCase().trim()
+}
+
+export function detectAssistantIntent(question: string): AssistantIntent {
+  const text = normalizeQuestion(question)
+
+  if (
+    text.includes('available room') ||
+    text.includes('vacant') ||
+    text.includes('room available') ||
+    text.includes('show available rooms')
+  ) {
+    return 'room_availability'
+  }
+
+  if (
+    text.includes('revenue this month') ||
+    text.includes('monthly revenue') ||
+    text.includes('earn this month') ||
+    text.includes('earned this month')
+  ) {
+    return 'monthly_revenue'
+  }
+
+  if (
+    text.includes('overdue invoice') ||
+    text.includes('unpaid invoice') ||
+    text.includes('not paid') ||
+    text.includes('who has not paid')
+  ) {
+    return 'overdue_invoices'
+  }
+
+  if (
+    text.includes('expire soon') ||
+    text.includes('expiring') ||
+    text.includes('ending soon') ||
+    text.includes('expiring this month')
+  ) {
+    return 'expiring_contracts'
+  }
+
+  if (
+    text.includes('urgent feedback') ||
+    text.includes('needs attention') ||
+    text.includes('serious complaint') ||
+    text.includes('serious complaints')
+  ) {
+    return 'urgent_feedback'
+  }
+
+  if (
+    text.includes('main tenant complaints') ||
+    text.includes('summarize feedback') ||
+    text.includes('common issues') ||
+    text.includes('feedback summary')
+  ) {
+    return 'feedback_summary'
+  }
+
+  if (
+    text.includes('electricity usage') ||
+    text.includes('water usage') ||
+    text.includes('utility cost') ||
+    text.includes('utility summary')
+  ) {
+    return 'utility_summary'
+  }
+
+  if (
+    text.includes('how many tenants') ||
+    text.includes('tenant count') ||
+    text.includes('active tenants')
+  ) {
+    return 'tenant_count'
+  }
+
+  return 'unknown'
+}
+
+async function getOwnerRows(collectionName: string, ownerId: string): Promise<Row[]> {
+  const snapshot = await getDocs(
+    query(collection(db, collectionName), where('ownerId', '==', ownerId)),
+  )
+
+  return snapshot.docs.map((documentSnapshot) => ({
+    id: documentSnapshot.id,
+    data: documentSnapshot.data(),
+  }))
+}
+
+function getTimestamp(value: unknown) {
+  if (typeof value === 'object' && value !== null && 'toDate' in value) {
+    return (value as { toDate: () => Date }).toDate().getTime()
+  }
+
+  if (typeof value === 'string') {
+    const time = new Date(value).getTime()
+    return Number.isNaN(time) ? 0 : time
+  }
+
+  return 0
+}
+
+function isCurrentMonth(value: unknown) {
+  const time = getTimestamp(value)
+  if (!time) return false
+
+  const date = new Date(time)
+  const now = new Date()
+
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()
+}
+
+function formatList(items: string[]) {
+  return items.map((item) => `- ${item}`).join('\n')
+}
+
+function formatLabel(value: unknown) {
+  return String(value || 'Not available')
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+function getEffectiveCategory(data: DocumentData) {
+  return String(data.aiSuggestedCategory ?? data.category ?? 'other')
+}
+
+function getEffectivePriority(data: DocumentData) {
+  return String(data.priority ?? data.aiSuggestedPriority ?? '')
+}
+
+function getTenantName(tenantById: Map<string, Row>, tenantId: unknown) {
+  if (typeof tenantId !== 'string') return 'Unknown tenant'
+
+  return String(tenantById.get(tenantId)?.data.fullName ?? 'Unknown tenant')
+}
+
+function getRoomName(roomById: Map<string, Row>, roomId: unknown) {
+  if (typeof roomId !== 'string') return 'Unknown room'
+
+  return String(roomById.get(roomId)?.data.roomNumber ?? 'Unknown room')
+}
+
+async function answerRoomAvailability(ownerId: string) {
+  const rooms = await getOwnerRows('rooms', ownerId)
+  const availableRooms = rooms.filter((room) => {
+    const status = room.data.status
+    return status === 'available' || status === 'vacant'
+  })
+  const occupiedCount = rooms.filter((room) => room.data.status === 'occupied').length
+  const maintenanceCount = rooms.filter((room) => room.data.status === 'maintenance').length
+  const roomNumbers = availableRooms
+    .map((room) => String(room.data.roomNumber ?? room.id))
+    .filter(Boolean)
+
+  if (availableRooms.length === 0) {
+    return `You currently have no available rooms. Occupied: ${occupiedCount}. Maintenance: ${maintenanceCount}.`
+  }
+
+  return `You currently have ${availableRooms.length} available rooms: ${roomNumbers.join(', ')}. Occupied: ${occupiedCount}. Maintenance: ${maintenanceCount}.`
+}
+
+async function answerMonthlyRevenue(ownerId: string) {
+  const invoices = await getOwnerRows('invoices', ownerId)
+  const paidThisMonth = invoices.filter(
+    (invoice) =>
+      invoice.data.status === 'paid' &&
+      isCurrentMonth(invoice.data.updatedAt ?? invoice.data.issueDate ?? invoice.data.createdAt),
+  )
+  const revenue = paidThisMonth.reduce(
+    (sum, invoice) => sum + Number(invoice.data.totalAmount ?? 0),
+    0,
+  )
+
+  return `Your paid revenue this month is ${formatCurrency(revenue)} from ${paidThisMonth.length} paid invoice(s).`
+}
+
+async function answerOverdueInvoices(ownerId: string) {
+  const [invoices, tenants] = await Promise.all([
+    getOwnerRows('invoices', ownerId),
+    getOwnerRows('tenants', ownerId),
+  ])
+  const tenantById = new Map(tenants.map((tenant) => [tenant.id, tenant]))
+  const overdue = invoices.filter((invoice) => invoice.data.status === 'overdue')
+
+  if (overdue.length === 0) {
+    return 'There are no overdue invoices right now.'
+  }
+
+  return [
+    `There are ${overdue.length} overdue invoices:`,
+    formatList(
+      overdue.slice(0, 10).map((invoice) => {
+        const tenantName = getTenantName(tenantById, invoice.data.tenantId)
+
+        return `${String(invoice.data.invoiceCode ?? invoice.id)}: ${tenantName}, ${formatCurrency(Number(invoice.data.totalAmount ?? 0))}`
+      }),
+    ),
+  ].join('\n')
+}
+
+async function answerExpiringContracts(ownerId: string) {
+  const [contracts, tenants, rooms] = await Promise.all([
+    getOwnerRows('contracts', ownerId),
+    getOwnerRows('tenants', ownerId),
+    getOwnerRows('rooms', ownerId),
+  ])
+  const tenantById = new Map(tenants.map((tenant) => [tenant.id, tenant]))
+  const roomById = new Map(rooms.map((room) => [room.id, room]))
+  const now = Date.now()
+  const inThirtyDays = new Date()
+  inThirtyDays.setDate(inThirtyDays.getDate() + 30)
+  const expiring = contracts.filter((contract) => {
+    const endTime = getTimestamp(contract.data.endDate)
+
+    return contract.data.status === 'active' && endTime >= now && endTime <= inThirtyDays.getTime()
+  })
+
+  if (expiring.length === 0) {
+    return 'No active contracts expire within the next 30 days.'
+  }
+
+  return [
+    `${expiring.length} active contract(s) expire within the next 30 days:`,
+    formatList(
+      expiring.slice(0, 10).map((contract) => {
+        const tenantName = getTenantName(tenantById, contract.data.tenantId)
+        const roomName = getRoomName(roomById, contract.data.roomId)
+
+        return `${String(contract.data.contractCode ?? contract.id)}: ${tenantName}, room ${roomName}, ends ${String(contract.data.endDate ?? '-')}`
+      }),
+    ),
+  ].join('\n')
+}
+
+async function answerUrgentFeedback(ownerId: string) {
+  const feedbacks = await getOwnerRows('feedbacks', ownerId)
+  const urgent = feedbacks.filter(
+    (feedback) => getEffectivePriority(feedback.data) === 'urgent',
+  )
+
+  if (urgent.length === 0) {
+    return 'There is no urgent feedback right now.'
+  }
+
+  return [
+    `${urgent.length} urgent feedback item(s) need attention:`,
+    formatList(
+      urgent.slice(0, 10).map((feedback) => {
+        const sentiment = feedback.data.sentiment
+          ? formatLabel(feedback.data.sentiment)
+          : 'Pending AI'
+
+        return `${String(feedback.data.title ?? feedback.id)}: ${formatLabel(feedback.data.status)}, ${sentiment}`
+      }),
+    ),
+  ].join('\n')
+}
+
+async function answerFeedbackSummary(ownerId: string) {
+  const feedbacks = await getOwnerRows('feedbacks', ownerId)
+  const categoryCounts = new Map<string, number>()
+  const sentimentCounts = new Map<string, number>()
+
+  feedbacks.forEach((feedback) => {
+    const category = getEffectiveCategory(feedback.data)
+    const sentiment = String(feedback.data.sentiment ?? 'pending')
+
+    categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1)
+    sentimentCounts.set(sentiment, (sentimentCounts.get(sentiment) ?? 0) + 1)
+  })
+
+  const topCategories = [...categoryCounts.entries()]
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 3)
+
+  if (topCategories.length === 0) {
+    return 'No tenant feedback has been submitted yet.'
+  }
+
+  return [
+    'The most common feedback categories are:',
+    ...topCategories.map(
+      ([category, count], index) => `${index + 1}. ${formatLabel(category)}: ${count} report(s)`,
+    ),
+    `Sentiment: Positive ${sentimentCounts.get('positive') ?? 0}, Neutral ${sentimentCounts.get('neutral') ?? 0}, Negative ${sentimentCounts.get('negative') ?? 0}, Pending AI ${sentimentCounts.get('pending') ?? 0}.`,
+  ].join('\n')
+}
+
+async function answerUtilitySummary(ownerId: string) {
+  const readings = await getOwnerRows('utilityReadings', ownerId)
+  const currentMonthReadings = readings.filter((reading) =>
+    isCurrentMonth(reading.data.billingMonth ?? reading.data.createdAt),
+  )
+  const electricityUsage = currentMonthReadings
+    .filter((reading) => reading.data.utilityType === 'electricity')
+    .reduce((sum, reading) => sum + Number(reading.data.usage ?? 0), 0)
+  const waterUsage = currentMonthReadings
+    .filter((reading) => reading.data.utilityType === 'water')
+    .reduce((sum, reading) => sum + Number(reading.data.usage ?? 0), 0)
+  const totalCost = currentMonthReadings.reduce(
+    (sum, reading) => sum + Number(reading.data.totalAmount ?? 0),
+    0,
+  )
+
+  return `This month, electricity usage is ${electricityUsage} unit(s), water usage is ${waterUsage} unit(s), and total utility charges are ${formatCurrency(totalCost)}.`
+}
+
+async function answerTenantCount(ownerId: string) {
+  const tenants = await getOwnerRows('tenants', ownerId)
+  const activeTenants = tenants.filter((tenant) => tenant.data.status === 'active')
+
+  return `You have ${tenants.length} tenant(s), including ${activeTenants.length} active tenant(s).`
+}
+
+export async function answerOwnerQuestion(
+  ownerId: string,
+  question: string,
+): Promise<AssistantAnswer> {
+  const intent = detectAssistantIntent(question)
+  let answer =
+    "I can help with rooms, tenants, invoices, contracts, utilities, and feedback. Try asking: 'Which invoices are overdue?'"
+
+  if (intent === 'room_availability') answer = await answerRoomAvailability(ownerId)
+  if (intent === 'monthly_revenue') answer = await answerMonthlyRevenue(ownerId)
+  if (intent === 'overdue_invoices') answer = await answerOverdueInvoices(ownerId)
+  if (intent === 'expiring_contracts') answer = await answerExpiringContracts(ownerId)
+  if (intent === 'urgent_feedback') answer = await answerUrgentFeedback(ownerId)
+  if (intent === 'feedback_summary') answer = await answerFeedbackSummary(ownerId)
+  if (intent === 'utility_summary') answer = await answerUtilitySummary(ownerId)
+  if (intent === 'tenant_count') answer = await answerTenantCount(ownerId)
+
+  void addDoc(collection(db, 'aiAssistantLogs'), {
+    ownerId,
+    question,
+    intent,
+    answer,
+    createdAt: serverTimestamp(),
+  }).catch((error) => {
+    console.warn('Unable to save AI assistant log.', error)
+  })
+
+  return { intent, answer }
+}

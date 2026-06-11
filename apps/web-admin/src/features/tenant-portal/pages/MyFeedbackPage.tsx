@@ -21,6 +21,12 @@ function formatAiValue(value: string | null | undefined) {
   return value ? formatLabel(value) : 'Pending AI'
 }
 
+function getPendingAiLabel(feedback: Feedback) {
+  return feedback.aiGenerated === false && feedback.aiError
+    ? 'AI unavailable'
+    : 'Pending AI'
+}
+
 function getAiCategoryLabel(feedback: Feedback) {
   if (feedback.aiSuggestedCategory) {
     return formatLabel(feedback.aiSuggestedCategory)
@@ -30,11 +36,13 @@ function getAiCategoryLabel(feedback: Feedback) {
     return formatLabel(feedback.category)
   }
 
-  return 'Pending AI'
+  return getPendingAiLabel(feedback)
 }
 
 function getAiPriorityLabel(feedback: Feedback) {
-  return formatAiValue(feedback.priority ?? feedback.aiSuggestedPriority)
+  return feedback.priority ?? feedback.aiSuggestedPriority
+    ? formatAiValue(feedback.priority ?? feedback.aiSuggestedPriority)
+    : getPendingAiLabel(feedback)
 }
 
 function formatConfidence(value: number | undefined) {
@@ -95,7 +103,7 @@ function TenantFeedbackViewModal({
             </div>
             <div>
               <dt>Sentiment</dt>
-              <dd>{formatAiValue(feedback.sentiment)}</dd>
+              <dd>{feedback.sentiment ? formatAiValue(feedback.sentiment) : getPendingAiLabel(feedback)}</dd>
             </div>
             <div>
               <dt>Priority</dt>
@@ -272,10 +280,11 @@ function MyFeedbackPage() {
               <thead>
                 <tr>
                   <th>Title</th>
-                  <th>Category</th>
-                  <th>AI Priority</th>
+                  <th>AI Category</th>
                   <th>AI Sentiment</th>
+                  <th>AI Priority</th>
                   <th>Status</th>
+                  <th>Owner Response</th>
                   <th>Created Date</th>
                   <th>Actions</th>
                 </tr>
@@ -298,18 +307,9 @@ function MyFeedbackPage() {
                           {formatLabel(feedback.category)}
                         </span>
                       ) : (
-                        <span className="tenant-ai-pending-badge">Pending AI</span>
-                      )}
-                    </td>
-                    <td>
-                      {feedback.priority || feedback.aiSuggestedPriority ? (
-                        <span
-                          className={`tenant-priority-badge tenant-priority-badge--${feedback.priority ?? feedback.aiSuggestedPriority}`}
-                        >
-                          {getAiPriorityLabel(feedback)}
+                        <span className="tenant-ai-pending-badge">
+                          {getPendingAiLabel(feedback)}
                         </span>
-                      ) : (
-                        <span className="tenant-ai-pending-badge">Pending AI</span>
                       )}
                     </td>
                     <td>
@@ -320,7 +320,22 @@ function MyFeedbackPage() {
                           {formatLabel(feedback.sentiment)}
                         </span>
                       ) : (
-                        <span className="tenant-ai-pending-badge">Pending AI</span>
+                        <span className="tenant-ai-pending-badge">
+                          {getPendingAiLabel(feedback)}
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      {feedback.priority || feedback.aiSuggestedPriority ? (
+                        <span
+                          className={`tenant-priority-badge tenant-priority-badge--${feedback.priority ?? feedback.aiSuggestedPriority}`}
+                        >
+                          {getAiPriorityLabel(feedback)}
+                        </span>
+                      ) : (
+                        <span className="tenant-ai-pending-badge">
+                          {getPendingAiLabel(feedback)}
+                        </span>
                       )}
                     </td>
                     <td>
@@ -330,6 +345,7 @@ function MyFeedbackPage() {
                         {formatLabel(feedback.status)}
                       </span>
                     </td>
+                    <td>{feedback.ownerResponse || 'Not available'}</td>
                     <td>{formatDate(feedback.createdAt)}</td>
                     <td>
                       <button

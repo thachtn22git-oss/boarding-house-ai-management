@@ -101,7 +101,7 @@ export async function analyzeFeedbackWithAI(
     }
   } catch (error) {
     console.error('Feedback AI analysis failed.', error)
-    throw new Error('AI analysis unavailable')
+    throw new Error('AI server is unavailable.')
   } finally {
     window.clearTimeout(timeoutId)
   }

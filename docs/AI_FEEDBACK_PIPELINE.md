@@ -65,6 +65,18 @@ Tenant feedback forms only collect:
 - Title
 - Description
 
+Text flow:
+
+```text
+Tenant submits feedback
+  -> Web or mobile app calls local AI server
+  -> AI predicts sentiment, category, priority, summary, confidence
+  -> App saves feedback document in Firestore
+  -> App creates owner notification
+  -> Owner reviews AI Analysis or re-analyzes later
+  -> Analytics reads stored AI fields for reports
+```
+
 When submitted, the app calls the AI server before creating the Firestore document.
 
 If AI analysis succeeds, feedback is saved with:
@@ -103,3 +115,63 @@ Owners can:
 - Analyze up to 10 pending feedback items in bulk.
 
 Failed re-analysis does not delete or overwrite existing feedback content.
+
+When re-analysis succeeds, the app updates:
+
+- `category`
+- `priority`
+- `sentiment`
+- `aiGenerated`
+- `aiSummary`
+- `aiSuggestedCategory`
+- `aiSuggestedPriority`
+- `aiConfidence`
+- `aiError`
+- `updatedAt`
+
+When re-analysis fails, the app saves:
+
+- `aiError: "AI analysis failed"`
+- `updatedAt`
+
+## Analytics
+
+Analytics pages use stored Firestore fields only. They do not call the AI server.
+
+Owner analytics are scoped to `ownerId`.
+
+Admin analytics use system-wide feedback data.
+
+AI feedback metrics include:
+
+- Total Feedback
+- AI Analyzed Feedback
+- Pending AI Feedback
+- Positive Feedback
+- Neutral Feedback
+- Negative Feedback
+- Urgent Feedback
+
+Charts use:
+
+- Sentiment: `sentiment`
+- Category: `aiSuggestedCategory || category`
+- Priority: `priority || aiSuggestedPriority`
+- Status by priority: `status` grouped with effective AI priority
+
+## Run the AI Server
+
+From the AI server directory:
+
+```bash
+cd services/ai-server
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Open:
+
+```text
+http://localhost:8000/docs
+```
+
+For Expo Go on a physical device, use the computer LAN IP in `EXPO_PUBLIC_AI_SERVER_URL` because `localhost` points to the phone itself.

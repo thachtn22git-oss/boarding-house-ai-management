@@ -185,14 +185,14 @@ export function MyFeedbackScreen() {
         <TextInput placeholder="Title" placeholderTextColor={colors.muted} style={styles.input} value={title} onChangeText={setTitle} />
         <TextInput multiline placeholder="Description" placeholderTextColor={colors.muted} style={[styles.input, styles.textarea]} value={content} onChangeText={setContent} />
         {formError ? <Text style={styles.error}>{formError}</Text> : null}
-        <PrimaryButton disabled={submitting} label={submitting ? 'Analyzing...' : 'Submit Feedback'} onPress={submitFeedback} />
+        <PrimaryButton disabled={submitting} label={submitting ? 'Analyzing feedback...' : 'Submit Feedback'} onPress={submitFeedback} />
       </ListCard>
       {!data?.feedbacks.length ? <Text style={styles.empty}>No feedback found.</Text> : null}
       {data?.feedbacks.map((feedback) => (
         <ListCard key={feedback.id} title={feedback.title} subtitle={formatDate(feedback.createdAt)}>
           <Text style={styles.meta}>Category: {formatAiCategory(feedback)}</Text>
           <Text style={styles.meta}>AI Priority: {formatAiPriority(feedback)}</Text>
-          <Text style={styles.meta}>AI Sentiment: {feedback.sentiment ?? 'Pending AI'}</Text>
+          <Text style={styles.meta}>AI Sentiment: {formatAiSentiment(feedback)}</Text>
           <Text style={styles.meta}>Status: {feedback.status}</Text>
           <Text style={styles.meta}>Owner Response: {feedback.ownerResponse ?? 'Not available'}</Text>
           <PrimaryButton label="View Details" onPress={() => showFeedbackDetails(feedback)} variant="secondary" />
@@ -255,7 +255,7 @@ function showFeedbackDetails(feedback: Feedback) {
     'AI Analysis',
     `Category: ${formatAiCategory(feedback)}`,
     `Priority: ${formatAiPriority(feedback)}`,
-    `Sentiment: ${feedback.sentiment ?? 'Pending AI'}`,
+    `Sentiment: ${formatAiSentiment(feedback)}`,
     `Category Confidence: ${formatConfidence(feedback.aiConfidence?.category)}`,
     `Sentiment Confidence: ${formatConfidence(feedback.aiConfidence?.sentiment)}`,
     `Priority Confidence: ${formatConfidence(feedback.aiConfidence?.priority)}`,
@@ -280,13 +280,23 @@ function formatAiCategory(feedback: Feedback) {
     return capitalize(feedback.category.replace('_', ' '))
   }
 
-  return 'Pending AI'
+  return getPendingAiLabel(feedback)
 }
 
 function formatAiPriority(feedback: Feedback) {
   const priority = feedback.priority ?? feedback.aiSuggestedPriority
 
-  return priority ? capitalize(priority.replace('_', ' ')) : 'Pending AI'
+  return priority ? capitalize(priority.replace('_', ' ')) : getPendingAiLabel(feedback)
+}
+
+function formatAiSentiment(feedback: Feedback) {
+  return feedback.sentiment
+    ? capitalize(feedback.sentiment.replace('_', ' '))
+    : getPendingAiLabel(feedback)
+}
+
+function getPendingAiLabel(feedback: Feedback) {
+  return feedback.aiGenerated === false && feedback.aiError ? 'AI unavailable' : 'Pending AI'
 }
 
 function capitalize(value: string) {

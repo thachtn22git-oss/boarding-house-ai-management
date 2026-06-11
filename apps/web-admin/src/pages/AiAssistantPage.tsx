@@ -1,10 +1,7 @@
-import PlaceholderPage from '../components/common/PlaceholderPage'
-import { getOwnerPage } from '../config/navigation'
+import OwnerAiAssistantPage from '../features/ai-assistant/pages/AiAssistantPage'
 
 function AiAssistantPage() {
-  const page = getOwnerPage('aiAssistant')
-
-  return <PlaceholderPage description={page.description} />
+  return <OwnerAiAssistantPage />
 }
 
 export default AiAssistantPage

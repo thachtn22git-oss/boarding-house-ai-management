@@ -1,9 +1,8 @@
 import {
   collection,
-  onSnapshot,
+  getDocs,
   type DocumentData,
   type QueryDocumentSnapshot,
-  type Unsubscribe,
 } from 'firebase/firestore'
 
 import { db } from '../../../config/firebase'
@@ -190,16 +189,27 @@ function isContractExpiringSoon(data: DocumentData) {
   return endTime >= now && endTime <= inThirtyDays.getTime()
 }
 
-function normalizeFeedbackCategory(category: unknown) {
-  const value = String(category ?? 'other')
+function formatDistributionLabel(value: string) {
+  return value
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
 
-  if (value === 'maintenance' || value === 'cleanliness') return 'Maintenance'
-  if (value === 'electricity' || value === 'water' || value === 'billing') return 'Utilities'
-  if (value === 'internet') return 'Internet'
-  if (value === 'security') return 'Security'
-  if (value === 'noise') return 'Noise'
+function getEffectiveCategory(data: DocumentData) {
+  const category = data.aiSuggestedCategory ?? data.category
 
-  return 'Other'
+  return typeof category === 'string' && category ? category : null
+}
+
+function getEffectivePriority(data: DocumentData) {
+  const priority = data.priority ?? data.aiSuggestedPriority
+
+  return typeof priority === 'string' && priority ? priority : null
+}
+
+function needsAIAnalysis(data: DocumentData) {
+  return !data.sentiment || !getEffectivePriority(data) || !getEffectiveCategory(data)
 }
 
 function createStatusDistribution(
@@ -324,20 +334,48 @@ export function getFeedbackAnalytics(
   const positive = feedbacks.filter((feedback) => feedback.data.sentiment === 'positive').length
   const neutral = feedbacks.filter((feedback) => feedback.data.sentiment === 'neutral').length
   const negative = feedbacks.filter((feedback) => feedback.data.sentiment === 'negative').length
-  const pendingAI = feedbacks.filter((feedback) => !feedback.data.sentiment).length
+  const pendingAI = feedbacks.filter((feedback) => needsAIAnalysis(feedback.data)).length
+  const aiAnalyzed = feedbacks.filter((feedback) => feedback.data.aiGenerated === true).length
+  const urgent = feedbacks.filter((feedback) => getEffectivePriority(feedback.data) === 'urgent').length
   const categoryGroups = groupSumBy(
     feedbacks,
-    (feedback) =>
-      normalizeFeedbackCategory(
-        feedback.data.aiSuggestedCategory ?? feedback.data.category,
-      ),
+    (feedback) => getEffectiveCategory(feedback.data) ?? 'pending',
     () => 1,
   )
+  const priorityGroups = groupSumBy(
+    feedbacks,
+    (feedback) => getEffectivePriority(feedback.data) ?? 'pending',
+    () => 1,
+  )
+  const statusByPriorityGroups = groupSumBy(
+    feedbacks,
+    (feedback) => {
+      const status = String(feedback.data.status ?? 'new')
+      const priority = getEffectivePriority(feedback.data) ?? 'pending'
+
+      return `${formatDistributionLabel(status)} / ${formatDistributionLabel(priority)}`
+    },
+    () => 1,
+  )
+  const categoryLabels = [
+    'electricity',
+    'water',
+    'internet',
+    'security',
+    'cleanliness',
+    'maintenance',
+    'billing',
+    'other',
+    'pending',
+  ]
+  const priorityLabels = ['low', 'medium', 'high', 'urgent', 'pending']
 
   return {
     total: feedbacks.length,
     resolved: getStatusCount(feedbacks, ['resolved']),
     pending: getStatusCount(feedbacks, ['new', 'in_review']),
+    aiAnalyzed,
+    urgent,
     negative,
     positive,
     neutral,
@@ -348,8 +386,16 @@ export function getFeedbackAnalytics(
       { label: 'Negative', value: negative },
       { label: 'Pending AI', value: pendingAI },
     ],
-    categoryDistribution: ['Maintenance', 'Utilities', 'Internet', 'Security', 'Noise', 'Other'].map(
-      (label) => ({ label, value: categoryGroups.get(label) ?? 0 }),
+    categoryDistribution: categoryLabels.map((label) => ({
+      label: label === 'pending' ? 'Pending AI' : formatDistributionLabel(label),
+      value: categoryGroups.get(label) ?? 0,
+    })),
+    priorityDistribution: priorityLabels.map((label) => ({
+      label: label === 'pending' ? 'Pending AI' : formatDistributionLabel(label),
+      value: priorityGroups.get(label) ?? 0,
+    })),
+    statusByPriority: [...statusByPriorityGroups.entries()].map(
+      ([label, value]) => ({ label, value }),
     ),
   }
 }
@@ -515,40 +561,30 @@ function buildAnalyticsData(
   }
 }
 
-export function subscribeToAnalytics(
+export async function getAnalyticsData(
   scope: AnalyticsScope,
   filter: DateRangeFilter,
-  callback: (data: AnalyticsData) => void,
-  onError?: (error: unknown) => void,
-): () => void {
-  const collections: AnalyticsCollections = {
-    rooms: [],
-    tenants: [],
-    contracts: [],
-    invoices: [],
-    utilityReadings: [],
-    feedbacks: [],
-  }
-  const loadedCollections = new Set<AnalyticsCollectionKey>()
-  const unsubscribers: Unsubscribe[] = analyticsCollections.map((collectionName) =>
-    onSnapshot(
-      collection(db, collectionName),
-      (snapshot) => {
-        collections[collectionName] = snapshot.docs
-        loadedCollections.add(collectionName)
-
-        if (loadedCollections.size === analyticsCollections.length) {
-          callback(buildAnalyticsData(collections, scope, filter))
-        }
-      },
-      (error) => {
-        console.error(`Unable to load ${collectionName} analytics.`, error)
-        onError?.(error)
-      },
-    ),
+): Promise<AnalyticsData> {
+  const snapshots = await Promise.all(
+    analyticsCollections.map(async (collectionName) => ({
+      collectionName,
+      docs: (await getDocs(collection(db, collectionName))).docs,
+    })),
+  )
+  const collections = snapshots.reduce(
+    (current, snapshot) => ({
+      ...current,
+      [snapshot.collectionName]: snapshot.docs,
+    }),
+    {
+      rooms: [],
+      tenants: [],
+      contracts: [],
+      invoices: [],
+      utilityReadings: [],
+      feedbacks: [],
+    } as AnalyticsCollections,
   )
 
-  return () => {
-    unsubscribers.forEach((unsubscribe) => unsubscribe())
-  }
+  return buildAnalyticsData(collections, scope, filter)
 }

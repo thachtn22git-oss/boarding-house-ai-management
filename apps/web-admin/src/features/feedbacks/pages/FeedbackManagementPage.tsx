@@ -17,6 +17,7 @@ import {
   resolveFeedback,
   updateFeedback,
   updateFeedbackAIAnalysis,
+  updateFeedbackAIError,
 } from '../services/feedback.service'
 import { analyzeFeedbackWithAI } from '../services/feedback-ai.service'
 import type {
@@ -334,6 +335,11 @@ function FeedbackManagementPage() {
       )
       setNotice('Feedback analyzed successfully.')
     } catch {
+      try {
+        await updateFeedbackAIError(feedback.id, 'AI analysis failed')
+      } catch (updateError) {
+        console.warn('Unable to save feedback AI error.', updateError)
+      }
       setError('AI analysis failed. Please try again.')
     } finally {
       setReanalyzingFeedbackId(null)
@@ -521,8 +527,8 @@ function FeedbackManagementPage() {
                   <th>Title</th>
                   <th>Tenant</th>
                   <th>Room</th>
-                  <th>AI Sentiment</th>
                   <th>AI Category</th>
+                  <th>AI Sentiment</th>
                   <th>AI Priority</th>
                   <th>Status</th>
                   <th>Actions</th>
@@ -544,11 +550,11 @@ function FeedbackManagementPage() {
                       <td>{tenant?.fullName ?? '-'}</td>
                       <td>{room ? `${room.roomNumber} - ${room.roomType}` : '-'}</td>
                       <td>
-                        {feedback.sentiment ? (
+                        {category ? (
                           <span
-                            className={`status-badge feedback-sentiment-badge--${feedback.sentiment}`}
+                            className={`status-badge feedback-category-badge--${category}`}
                           >
-                            {getSentimentLabel(feedback.sentiment)}
+                            {getCategoryLabel(category)}
                           </span>
                         ) : (
                           <span className="status-badge feedback-ai-pending-badge">
@@ -560,11 +566,11 @@ function FeedbackManagementPage() {
                         </span>
                       </td>
                       <td>
-                        {category ? (
+                        {feedback.sentiment ? (
                           <span
-                            className={`status-badge feedback-category-badge--${category}`}
+                            className={`status-badge feedback-sentiment-badge--${feedback.sentiment}`}
                           >
-                            {getCategoryLabel(category)}
+                            {getSentimentLabel(feedback.sentiment)}
                           </span>
                         ) : (
                           <span className="status-badge feedback-ai-pending-badge">

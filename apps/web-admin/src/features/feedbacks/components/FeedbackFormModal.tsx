@@ -76,7 +76,7 @@ function getInitialValues(feedback: Feedback | null): FeedbackFormValues {
     roomId: feedback.roomId ?? '',
     title: feedback.title,
     content: feedback.content,
-    category: feedback.category,
+    category: feedback.category ?? 'other',
     priority: feedback.priority ?? 'medium',
     status: feedback.status,
     sentiment: feedback.sentiment ?? undefined,

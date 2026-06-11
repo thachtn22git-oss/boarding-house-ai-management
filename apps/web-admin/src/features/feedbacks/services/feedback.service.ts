@@ -253,6 +253,16 @@ export async function updateFeedbackAIAnalysis(
   })
 }
 
+export async function updateFeedbackAIError(
+  feedbackId: string,
+  message: string,
+): Promise<void> {
+  await updateDoc(doc(db, 'feedbacks', feedbackId), {
+    aiError: message,
+    updatedAt: serverTimestamp(),
+  })
+}
+
 export async function deleteFeedback(feedbackId: string): Promise<void> {
   await deleteDoc(doc(db, 'feedbacks', feedbackId))
 }

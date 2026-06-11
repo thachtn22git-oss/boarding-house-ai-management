@@ -9,6 +9,7 @@ export type OwnerTabKey =
   | 'contracts'
   | 'utilities'
   | 'notifications'
+  | 'aiAssistant'
   | 'profile'
 
 export interface NavigationItem {
@@ -29,6 +30,7 @@ export const ownerMoreItems: NavigationItem[] = [
   { key: 'contracts', label: 'Contracts' },
   { key: 'utilities', label: 'Utilities' },
   { key: 'notifications', label: 'Notifications' },
+  { key: 'aiAssistant', label: 'AI Assistant' },
   { key: 'profile', label: 'Profile' },
 ]
 

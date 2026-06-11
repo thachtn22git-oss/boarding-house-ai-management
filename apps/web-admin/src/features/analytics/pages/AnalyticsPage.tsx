@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Bar,
   BarChart,
@@ -18,7 +18,7 @@ import {
 import { DashboardSection, StatCard } from '../../../components/dashboard'
 import { useAuth } from '../../auth/useAuth'
 import {
-  subscribeToAnalytics,
+  getAnalyticsData,
 } from '../services/analytics.service'
 import type {
   AnalyticsData,
@@ -117,35 +117,30 @@ function AnalyticsPage() {
     return null
   }, [currentUser])
 
-  useEffect(() => {
+  const loadAnalytics = useCallback(async () => {
     if (!scope) {
-      void Promise.resolve().then(() => {
-        setError('You do not have access to analytics.')
-        setLoading(false)
-      })
-      return undefined
+      setError('You do not have access to analytics.')
+      setLoading(false)
+      return
     }
 
-    void Promise.resolve().then(() => {
-      setLoading(true)
-      setError('')
-    })
+    setLoading(true)
+    setError('')
 
-    return subscribeToAnalytics(
-      scope,
-      filter,
-      (nextData) => {
-        setData(nextData)
-        setLoading(false)
-        setError('')
-      },
-      (loadError) => {
-        console.error('Unable to load analytics.', loadError)
-        setError('Unable to load analytics data. Please try again.')
-        setLoading(false)
-      },
-    )
+    try {
+      const nextData = await getAnalyticsData(scope, filter)
+      setData(nextData)
+    } catch (loadError) {
+      console.error('Unable to load analytics.', loadError)
+      setError('Unable to load analytics data. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }, [filter, scope])
+
+  useEffect(() => {
+    void loadAnalytics()
+  }, [loadAnalytics])
 
   if (loading && !data) {
     return (
@@ -153,7 +148,7 @@ function AnalyticsPage() {
         <section className="dashboard-card dashboard-state-card">
           <div>
             <h2>Loading analytics</h2>
-            <p>Fetching realtime reports from Firestore.</p>
+            <p>Fetching reports from Firestore.</p>
           </div>
         </section>
       </div>
@@ -215,6 +210,14 @@ function AnalyticsPage() {
           />
         </label>
         <div className="analytics-export-actions">
+          <button
+            className="primary-button"
+            type="button"
+            disabled={loading}
+            onClick={() => void loadAnalytics()}
+          >
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </button>
           <button
             className="secondary-button"
             type="button"
@@ -425,11 +428,14 @@ function AnalyticsPage() {
       <DashboardSection title="Feedback Analytics">
         <div className="stats-grid">
           <StatCard label="Total Feedbacks" value={String(data.feedback.total)} />
+          <StatCard label="AI Analyzed Feedback" value={String(data.feedback.aiAnalyzed)} tone="primary" />
+          <StatCard label="Pending AI Feedback" value={String(data.feedback.pendingAI)} tone="warning" />
           <StatCard label="Resolved" value={String(data.feedback.resolved)} tone="success" />
           <StatCard label="Pending" value={String(data.feedback.pending)} tone="warning" />
           <StatCard label="Negative Sentiment" value={String(data.feedback.negative)} tone="danger" />
           <StatCard label="Positive Sentiment" value={String(data.feedback.positive)} tone="success" />
           <StatCard label="Neutral Sentiment" value={String(data.feedback.neutral)} tone="neutral" />
+          <StatCard label="Urgent Feedback" value={String(data.feedback.urgent)} tone="danger" />
         </div>
       </DashboardSection>
 
@@ -456,6 +462,32 @@ function AnalyticsPage() {
               <YAxis />
               <Tooltip />
               <Bar dataKey="value" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </AnalyticsChartCard>
+
+        <AnalyticsChartCard title="AI Priority Distribution">
+          <ResponsiveContainer width="100%" height={260}>
+            <PieChart>
+              <Pie data={data.feedback.priorityDistribution} dataKey="value" nameKey="label" outerRadius={90} label>
+                {data.feedback.priorityDistribution.map((entry, index) => (
+                  <Cell key={entry.label} fill={pieColors[index % pieColors.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </AnalyticsChartCard>
+
+        <AnalyticsChartCard title="Feedback Status by AI Priority">
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={data.feedback.statusByPriority}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="label" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="value" fill="#7c3aed" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </AnalyticsChartCard>

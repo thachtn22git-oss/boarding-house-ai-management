@@ -87,12 +87,16 @@ export type AnalyticsData = {
     total: number
     resolved: number
     pending: number
+    aiAnalyzed: number
+    urgent: number
     negative: number
     positive: number
     neutral: number
     pendingAI: number
     sentimentDistribution: ChartPoint[]
     categoryDistribution: ChartPoint[]
+    priorityDistribution: ChartPoint[]
+    statusByPriority: ChartPoint[]
   }
   utilities: {
     trend: UtilityTrendPoint[]

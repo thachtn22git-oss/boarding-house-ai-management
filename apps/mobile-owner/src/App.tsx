@@ -6,6 +6,7 @@ import { AppShell } from './components/layout/AppShell'
 import { colors } from './constants/theme'
 import type { OwnerTabKey } from './constants/navigation'
 import { LoginScreen } from './features/auth/LoginScreen'
+import { OwnerAiAssistantScreen } from './features/ai-assistant/OwnerAiAssistantScreen'
 import { ChatScreen } from './features/chat/ChatScreen'
 import { DashboardScreen } from './features/dashboard/DashboardScreen'
 import {
@@ -45,6 +46,7 @@ function OwnerApp() {
       {activeTab === 'contracts' ? <ContractsScreen /> : null}
       {activeTab === 'utilities' ? <UtilitiesScreen /> : null}
       {activeTab === 'notifications' ? <NotificationsScreen /> : null}
+      {activeTab === 'aiAssistant' ? <OwnerAiAssistantScreen /> : null}
       {activeTab === 'profile' ? <ProfileScreen /> : null}
       {activeTab === 'more' ? <MoreScreen onNavigate={setActiveTab} /> : null}
     </AppShell>

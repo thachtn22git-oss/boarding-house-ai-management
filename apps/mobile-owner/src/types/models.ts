@@ -112,7 +112,7 @@ export interface Feedback {
   tenantId?: string
   roomId?: string
   title: string
-  category?: FeedbackCategory
+  category?: FeedbackCategory | null
   priority?: FeedbackPriority | null
   sentiment?: SentimentLabel | null
   status: FeedbackStatus

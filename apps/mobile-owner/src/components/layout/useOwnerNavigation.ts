@@ -12,6 +12,7 @@ const ownerTabRoutes: Record<OwnerTabKey, Href> = {
   contracts: '/owner/contracts' as Href,
   utilities: '/owner/utilities' as Href,
   notifications: '/owner/notifications' as Href,
+  aiAssistant: '/owner/ai-assistant' as Href,
   profile: '/owner/profile' as Href,
 }
 
