@@ -42,3 +42,18 @@ Because the app currently uses Firebase Auth, Supabase RLS cannot verify Firebas
 - A secure backend proxy that verifies Firebase ID tokens and performs Supabase reads/writes server-side.
 
 Client services still filter by `owner_id` and `participant_ids`, but client-side filtering is not a security boundary.
+
+## Realtime Setup
+
+To make chat realtime updates work:
+
+1. Go to the Supabase Dashboard.
+2. Open Database -> Replication.
+3. Enable Realtime for:
+   - `chat_rooms`
+   - `chat_messages`
+   - `ai_conversations`
+   - `ai_messages` if AI realtime updates are needed later.
+4. Restart the web and mobile apps after enabling replication.
+
+If Realtime is not enabled, chat messages are still saved, but clients may need to refresh or navigate away and back before seeing updates.

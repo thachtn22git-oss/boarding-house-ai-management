@@ -265,7 +265,7 @@ export function subscribeToUserChatRooms(
     .catch((error) => {
       logSupabaseError('Loading chat rooms', error)
       onError?.(error)
-    })
+      })
   }
 
   load()
@@ -275,17 +275,25 @@ export function subscribeToUserChatRooms(
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'chat_rooms' },
-      load,
+      (payload) => {
+        console.log('Chat room realtime event:', payload.eventType)
+        load()
+      },
     )
     .subscribe((status, error) => {
       if (error) onError?.(error)
       if (status === 'CHANNEL_ERROR') {
         onError?.(new Error('Unable to subscribe to chat rooms.'))
+        console.warn('Supabase chat room realtime subscription failed.', { userId, status, error })
+      }
+      if (status === 'SUBSCRIBED') {
+        console.log('Subscribed to chat rooms:', userId)
       }
     })
 
   return () => {
     active = false
+    console.log('Unsubscribed from chat rooms:', userId)
     void client.removeChannel(channel)
   }
 }
@@ -320,10 +328,13 @@ export function subscribeToChatMessages(
   }
 
   let active = true
+  let currentMessages: ChatMessage[] = []
   const load = () => {
     void listMessages(chatRoomId)
       .then((messages) => {
-        if (active) callback(messages)
+        if (!active) return
+        currentMessages = messages
+        callback(messages)
       })
       .catch((error) => {
         logSupabaseError('Loading chat messages', error)
@@ -338,7 +349,42 @@ export function subscribeToChatMessages(
     .on(
       'postgres_changes',
       {
-        event: '*',
+        event: 'INSERT',
+        schema: 'public',
+        table: 'chat_messages',
+        filter: `chat_room_id=eq.${chatRoomId}`,
+      },
+      (payload) => {
+        console.log('New realtime message:', payload.new)
+        const row = payload.new as ChatMessageRow
+        if (!row || row.chat_room_id !== chatRoomId) return
+
+        const nextMessage = mapChatMessage(row)
+        currentMessages = [...currentMessages, nextMessage]
+          .filter((message, index, messages) =>
+            messages.findIndex((candidate) => candidate.id === message.id) === index,
+          )
+          .sort((left, right) =>
+            new Date(String(left.createdAt ?? 0)).getTime() -
+            new Date(String(right.createdAt ?? 0)).getTime(),
+          )
+        callback(currentMessages)
+      },
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'chat_messages',
+        filter: `chat_room_id=eq.${chatRoomId}`,
+      },
+      load,
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'DELETE',
         schema: 'public',
         table: 'chat_messages',
         filter: `chat_room_id=eq.${chatRoomId}`,
@@ -349,11 +395,16 @@ export function subscribeToChatMessages(
       if (error) onError?.(error)
       if (status === 'CHANNEL_ERROR') {
         onError?.(new Error('Unable to subscribe to chat messages.'))
+        console.warn('Supabase chat message realtime subscription failed.', { chatRoomId, status, error })
+      }
+      if (status === 'SUBSCRIBED') {
+        console.log('Subscribed to chat messages:', chatRoomId)
       }
     })
 
   return () => {
     active = false
+    console.log('Unsubscribed from chat messages:', chatRoomId)
     void client.removeChannel(channel)
   }
 }
