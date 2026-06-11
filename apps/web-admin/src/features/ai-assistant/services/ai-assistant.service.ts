@@ -33,17 +33,49 @@ type Row = {
 }
 
 function normalizeQuestion(question: string) {
-  return question.toLowerCase().trim()
+  return question
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function hasAny(text: string, keywords: string[]) {
+  return keywords.some((keyword) => text.includes(keyword))
 }
 
 export function detectAssistantIntent(question: string): AssistantIntent {
   const text = normalizeQuestion(question)
+  const hasRoomKeyword = hasAny(text, [
+    'room',
+    'rooms',
+  ])
+  const hasAvailabilityKeyword = hasAny(text, [
+    'available',
+    'availability',
+    'vacant',
+    'vacancy',
+    'empty',
+  ])
+  const hasInvoiceKeyword = hasAny(text, [
+    'invoice',
+    'invoices',
+    'payment',
+    'payments',
+    'bill',
+    'bills',
+  ])
+  const hasOverdueKeyword = hasAny(text, [
+    'overdue',
+    'unpaid',
+    'late',
+    'not paid',
+  ])
 
   if (
-    text.includes('available room') ||
-    text.includes('vacant') ||
-    text.includes('room available') ||
-    text.includes('show available rooms')
+    (hasRoomKeyword && hasAvailabilityKeyword) ||
+    text === 'available rooms' ||
+    text === 'vacant rooms'
   ) {
     return 'room_availability'
   }
@@ -58,10 +90,11 @@ export function detectAssistantIntent(question: string): AssistantIntent {
   }
 
   if (
-    text.includes('overdue invoice') ||
-    text.includes('unpaid invoice') ||
-    text.includes('not paid') ||
-    text.includes('who has not paid')
+    (hasInvoiceKeyword && hasOverdueKeyword) ||
+    text.includes('who has not paid') ||
+    text.includes('late payments') ||
+    text.includes('unpaid bills') ||
+    text.includes('overdue bills')
   ) {
     return 'overdue_invoices'
   }
@@ -158,6 +191,38 @@ function formatLabel(value: unknown) {
     .join(' ')
 }
 
+function isAvailableStatus(status: unknown) {
+  return status === 'available' || status === 'vacant' || status === 'empty'
+}
+
+function isInvoiceOverdue(data: DocumentData) {
+  if (data.status === 'overdue') return true
+  if (data.status === 'paid') return false
+
+  const dueTime = getTimestamp(data.dueDate)
+
+  return Boolean(dueTime && dueTime < startOfToday().getTime())
+}
+
+function startOfToday() {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  return today
+}
+
+function formatDueDate(value: unknown) {
+  const time = getTimestamp(value)
+
+  if (!time) return 'no due date'
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+  }).format(new Date(time))
+}
+
 function getEffectiveCategory(data: DocumentData) {
   return String(data.aiSuggestedCategory ?? data.category ?? 'other')
 }
@@ -181,8 +246,7 @@ function getRoomName(roomById: Map<string, Row>, roomId: unknown) {
 async function answerRoomAvailability(ownerId: string) {
   const rooms = await getOwnerRows('rooms', ownerId)
   const availableRooms = rooms.filter((room) => {
-    const status = room.data.status
-    return status === 'available' || status === 'vacant'
+    return isAvailableStatus(room.data.status)
   })
   const occupiedCount = rooms.filter((room) => room.data.status === 'occupied').length
   const maintenanceCount = rooms.filter((room) => room.data.status === 'maintenance').length
@@ -191,10 +255,17 @@ async function answerRoomAvailability(ownerId: string) {
     .filter(Boolean)
 
   if (availableRooms.length === 0) {
-    return `You currently have no available rooms. Occupied: ${occupiedCount}. Maintenance: ${maintenanceCount}.`
+    return 'All rooms are currently occupied or unavailable.'
   }
 
-  return `You currently have ${availableRooms.length} available rooms: ${roomNumbers.join(', ')}. Occupied: ${occupiedCount}. Maintenance: ${maintenanceCount}.`
+  return [
+    `You currently have ${availableRooms.length} available rooms out of ${rooms.length} total rooms.`,
+    '',
+    'Available rooms:',
+    formatList(roomNumbers),
+    '',
+    `Occupied rooms: ${occupiedCount}. Maintenance rooms: ${maintenanceCount}.`,
+  ].join('\n')
 }
 
 async function answerMonthlyRevenue(ownerId: string) {
@@ -218,10 +289,10 @@ async function answerOverdueInvoices(ownerId: string) {
     getOwnerRows('tenants', ownerId),
   ])
   const tenantById = new Map(tenants.map((tenant) => [tenant.id, tenant]))
-  const overdue = invoices.filter((invoice) => invoice.data.status === 'overdue')
+  const overdue = invoices.filter((invoice) => isInvoiceOverdue(invoice.data))
 
   if (overdue.length === 0) {
-    return 'There are no overdue invoices right now.'
+    return 'There are no overdue invoices.'
   }
 
   return [
@@ -229,8 +300,14 @@ async function answerOverdueInvoices(ownerId: string) {
     formatList(
       overdue.slice(0, 10).map((invoice) => {
         const tenantName = getTenantName(tenantById, invoice.data.tenantId)
+        const fallbackTenantName =
+          typeof invoice.data.tenantName === 'string'
+            ? invoice.data.tenantName
+            : 'Unknown tenant'
+        const displayTenantName =
+          tenantName === 'Unknown tenant' ? fallbackTenantName : tenantName
 
-        return `${String(invoice.data.invoiceCode ?? invoice.id)}: ${tenantName}, ${formatCurrency(Number(invoice.data.totalAmount ?? 0))}`
+        return `${String(invoice.data.invoiceCode ?? invoice.id)}: ${displayTenantName}, ${formatCurrency(Number(invoice.data.totalAmount ?? 0))}, due ${formatDueDate(invoice.data.dueDate)}`
       }),
     ),
   ].join('\n')
@@ -355,6 +432,8 @@ export async function answerOwnerQuestion(
   question: string,
 ): Promise<AssistantAnswer> {
   const intent = detectAssistantIntent(question)
+  console.log('AI Assistant question:', question)
+  console.log('Detected intent:', intent)
   let answer =
     "I can help with rooms, tenants, invoices, contracts, utilities, and feedback. Try asking: 'Which invoices are overdue?'"
 
