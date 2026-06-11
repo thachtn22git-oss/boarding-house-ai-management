@@ -9,6 +9,7 @@ import {
 } from '../services/ai-assistant.service'
 import {
   createConversation,
+  deleteConversation,
   getConversationMessages,
   getAIHistoryUnavailableMessage,
   getLastAIHistoryError,
@@ -105,6 +106,9 @@ function AiAssistantPage() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [historyWarning, setHistoryWarning] = useState('')
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
+  const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
   const messageListRef = useRef<HTMLDivElement | null>(null)
 
   const selectedConversationId = selectedConversation?.id
@@ -168,7 +172,7 @@ function AiAssistantPage() {
     setError('')
 
     try {
-      if (!isSupabaseConfigured) {
+      if (!isSupabaseConfigured || selectedConversationId.startsWith('local-')) {
         setLoadingMessages(false)
         return
       }
@@ -231,6 +235,75 @@ function AiAssistantPage() {
     } catch (createError) {
       console.error('Unable to create AI conversation.', createError)
       setHistoryWarning(getAIHistoryUnavailableMessage(createError))
+    }
+  }
+
+  async function saveConversationTitle(conversation: AssistantConversation) {
+    const nextTitle = renameValue.trim() || conversation.title
+
+    setRenamingConversationId(null)
+    setRenameValue('')
+
+    if (nextTitle === conversation.title) return
+
+    const updatedConversation: AssistantConversation = {
+      ...conversation,
+      title: nextTitle,
+      updatedAt: new Date().toISOString(),
+    }
+
+    setConversations((current) =>
+      current.map((item) => (item.id === conversation.id ? updatedConversation : item)),
+    )
+    setSelectedConversation((current) =>
+      current?.id === conversation.id ? updatedConversation : current,
+    )
+
+    if (!isSupabaseConfigured || conversation.id.startsWith('local-') || !currentUser) {
+      return
+    }
+
+    const persistedConversation = await updateConversationTitle(
+      conversation.id,
+      currentUser.uid,
+      nextTitle,
+    )
+
+    if (!persistedConversation) {
+      setHistoryWarning(getAIHistoryUnavailableMessage(getLastAIHistoryError()))
+      return
+    }
+
+    setConversations((current) =>
+      current.map((item) => (item.id === conversation.id ? persistedConversation : item)),
+    )
+    setSelectedConversation((current) =>
+      current?.id === conversation.id ? persistedConversation : current,
+    )
+  }
+
+  async function handleDeleteConversation(conversation: AssistantConversation) {
+    if (!currentUser) return
+
+    const confirmed = window.confirm('Delete this conversation? This action cannot be undone.')
+    if (!confirmed) return
+
+    setActiveMenuId(null)
+    setConversations((current) => current.filter((item) => item.id !== conversation.id))
+
+    if (selectedConversation?.id === conversation.id) {
+      const nextConversation = conversations.find((item) => item.id !== conversation.id) ?? null
+      setSelectedConversation(nextConversation)
+      setMessages([])
+    }
+
+    if (!isSupabaseConfigured || conversation.id.startsWith('local-')) {
+      return
+    }
+
+    const deleted = await deleteConversation(conversation.id, currentUser.uid)
+    if (!deleted) {
+      setHistoryWarning(getAIHistoryUnavailableMessage(getLastAIHistoryError()))
     }
   }
 
@@ -345,19 +418,80 @@ function AiAssistantPage() {
             <p className="ai-muted">No conversations yet.</p>
           ) : (
             conversations.map((conversation) => (
-              <button
+              <div
                 className={
                   conversation.id === selectedConversationId
                     ? 'ai-conversation-item ai-conversation-item--active'
                     : 'ai-conversation-item'
                 }
                 key={conversation.id}
-                type="button"
-                onClick={() => setSelectedConversation(conversation)}
+                onClick={() => {
+                  if (renamingConversationId === conversation.id) return
+                  setSelectedConversation(conversation)
+                }}
               >
-                <span>{conversation.title}</span>
-                <small>{formatRelativeTime(conversation.updatedAt ?? conversation.createdAt)}</small>
-              </button>
+                <div className="ai-conversation-copy">
+                  {renamingConversationId === conversation.id ? (
+                    <input
+                      autoFocus
+                      className="ai-conversation-rename-input"
+                      value={renameValue}
+                      onBlur={() => void saveConversationTitle(conversation)}
+                      onChange={(event) => setRenameValue(event.target.value)}
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          void saveConversationTitle(conversation)
+                        }
+
+                        if (event.key === 'Escape') {
+                          setRenamingConversationId(null)
+                          setRenameValue('')
+                        }
+                      }}
+                    />
+                  ) : (
+                    <span>{conversation.title}</span>
+                  )}
+                  <small>{formatRelativeTime(conversation.updatedAt ?? conversation.createdAt)}</small>
+                </div>
+                <div className="ai-conversation-actions" onClick={(event) => event.stopPropagation()}>
+                  <button
+                    aria-label="Conversation menu"
+                    className="ai-conversation-menu-button"
+                    type="button"
+                    onClick={() =>
+                      setActiveMenuId((current) =>
+                        current === conversation.id ? null : conversation.id,
+                      )
+                    }
+                  >
+                    ⋮
+                  </button>
+                  {activeMenuId === conversation.id ? (
+                    <div className="ai-conversation-menu">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveMenuId(null)
+                          setRenamingConversationId(conversation.id)
+                          setRenameValue(conversation.title)
+                        }}
+                      >
+                        Rename
+                      </button>
+                      <button
+                        className="ai-conversation-delete"
+                        type="button"
+                        onClick={() => void handleDeleteConversation(conversation)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
             ))
           )}
         </div>

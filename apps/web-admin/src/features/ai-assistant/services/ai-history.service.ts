@@ -243,6 +243,26 @@ export async function touchConversation(conversationId: string, ownerId: string)
   return mapConversation(data)
 }
 
+export async function deleteConversation(conversationId: string, ownerId: string) {
+  const client = ensureSupabase()
+  if (!client) return false
+
+  const { error } = await client
+    .from('ai_conversations')
+    .delete()
+    .eq('id', conversationId)
+    .eq('owner_id', ownerId)
+
+  if (error) {
+    rememberAIHistoryError(error)
+    logSupabaseError('Deleting AI conversation', error)
+    return false
+  }
+
+  clearAIHistoryError()
+  return true
+}
+
 export async function logAIUsage(
   ownerId: string,
   conversationId: string | null,

@@ -291,7 +291,9 @@ export function getAssistantConversationTitle(intent: AssistantIntent, question:
   if (intent === 'utility_summary') return 'Utility Summary'
   if (intent === 'tenant_count') return 'Tenant Overview'
 
-  return 'New Conversation'
+  const fallbackTitle = question.trim().replace(/\s+/g, ' ').slice(0, 40)
+
+  return fallbackTitle || 'New Conversation'
 }
 
 function formatDueDate(value: unknown) {
