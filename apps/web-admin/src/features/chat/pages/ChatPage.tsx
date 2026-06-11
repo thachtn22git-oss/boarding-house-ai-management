@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { useAuth } from '../../auth/useAuth'
@@ -38,6 +38,7 @@ function ChatPage() {
   const [contactsOpen, setContactsOpen] = useState(false)
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState('')
+  const selectedRoomRef = useRef<ChatRoom | null>(null)
 
   useEffect(() => {
     if (!currentUser || currentUser.role === 'admin') {
@@ -69,6 +70,10 @@ function ChatPage() {
   )
 
   useEffect(() => {
+    selectedRoomRef.current = selectedRoom
+  }, [selectedRoom])
+
+  useEffect(() => {
     const roomIdFromUrl = searchParams.get('roomId')
 
     if (
@@ -81,35 +86,52 @@ function ChatPage() {
   }, [rooms, searchParams, selectedRoomId])
 
   useEffect(() => {
-    if (!selectedRoom || !currentUser) {
+    if (!selectedRoomId || !currentUser) {
       setMessages([])
+      setIsLoadingMessages(false)
       return undefined
     }
 
-    if (!selectedRoom.participantIds.includes(currentUser.uid)) {
+    const room = selectedRoomRef.current
+
+    if (!room || room.id !== selectedRoomId) {
+      setMessages([])
+      setIsLoadingMessages(false)
+      return undefined
+    }
+
+    if (!room.participantIds.includes(currentUser.uid)) {
       setError('You are not allowed to access this conversation.')
       setMessages([])
+      setIsLoadingMessages(false)
       return undefined
     }
 
+    console.log(`Subscribing to messages for room: ${selectedRoomId}`)
+    setMessages([])
     setIsLoadingMessages(true)
-    void markChatRoomAsRead(selectedRoom.id, currentUser.uid).catch((readError) => {
+    void markChatRoomAsRead(selectedRoomId, currentUser.uid).catch((readError) => {
       console.warn('Unable to mark chat room as read.', readError)
     })
 
-    return subscribeToChatMessages(
-      selectedRoom.id,
+    const unsubscribe = subscribeToChatMessages(
+      selectedRoomId,
       (nextMessages) => {
         setMessages(nextMessages)
         setIsLoadingMessages(false)
       },
       (messagesError) => {
         console.warn('Unable to subscribe to chat messages.', messagesError)
-        setError('Error loading chat.')
+        setError('Realtime updates are unavailable. Please refresh.')
         setIsLoadingMessages(false)
       },
     )
-  }, [currentUser, selectedRoom])
+
+    return () => {
+      console.log(`Unsubscribing from messages for room: ${selectedRoomId}`)
+      unsubscribe()
+    }
+  }, [currentUser?.uid, selectedRoomId])
 
   const filteredRooms = useMemo(() => {
     if (!currentUser) {
@@ -209,6 +231,13 @@ function ChatPage() {
         return
       }
 
+      setRooms((current) => {
+        if (current.some((item) => item.id === room.id)) {
+          return current.map((item) => (item.id === room.id ? room : item))
+        }
+
+        return [room, ...current]
+      })
       setSelectedRoomId(room.id)
       setContactsOpen(false)
     } catch (startError) {

@@ -355,10 +355,11 @@ export function subscribeToChatMessages(
         filter: `chat_room_id=eq.${chatRoomId}`,
       },
       (payload) => {
-        console.log('New realtime message:', payload.new)
         const row = payload.new as ChatMessageRow
         if (!row || row.chat_room_id !== chatRoomId) return
 
+        console.log('Realtime message inserted:', row.id)
+        console.log('New realtime message:', payload.new)
         const nextMessage = mapChatMessage(row)
         currentMessages = [...currentMessages, nextMessage]
           .filter((message, index, messages) =>
