@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Screen } from '../../components/common/Screen'
 import { PrimaryButton } from '../../components/common/PrimaryButton'
 import { ListCard } from '../../components/cards/ListCard'
 import { StatCard } from '../../components/cards/StatCard'
 import { colors, spacing } from '../../constants/theme'
 import { useAuth } from '../../providers/AuthProvider'
+import { DEMO_PAYMENT_CONFIG } from '../../config/demo-payment'
+import { formatVndAmount } from '../../utils/demo-payment'
 import {
-  buildDemoQrPayload,
+  buildDemoVietQRUrl,
   createTenantFeedback,
   getCurrentTenant,
   simulateTenantInvoiceDemoPayment,
@@ -117,7 +119,7 @@ export function MyInvoicesScreen() {
           <View style={styles.actions}>
             <PrimaryButton label="View Details" onPress={() => setSelectedInvoice(invoice)} variant="secondary" />
             {invoice.status !== 'paid' && invoice.status !== 'cancelled' ? (
-              <PrimaryButton label="Pay" onPress={() => setSelectedInvoice(invoice)} />
+              <PrimaryButton label="Pay with VietQR" onPress={() => setSelectedInvoice(invoice)} />
             ) : null}
           </View>
         </ListCard>
@@ -240,6 +242,7 @@ function InvoiceDetailModal({
 }) {
   const [showPayment, setShowPayment] = useState(false)
   const [processingPayment, setProcessingPayment] = useState(false)
+  const [qrImageFailed, setQrImageFailed] = useState(false)
 
   if (!invoice) return null
   const currentInvoice = invoice
@@ -247,7 +250,7 @@ function InvoiceDetailModal({
   const discount = invoice.discount ?? 0
   const remaining = Math.max(0, (invoice.totalAmount ?? 0) - (invoice.paidAmount ?? 0))
   const canPay = invoice.status !== 'paid' && invoice.status !== 'cancelled'
-  const qrPayload = buildDemoQrPayload(invoice, tenantName)
+  const vietQrUrl = buildDemoVietQRUrl(invoice)
 
   async function completeDemoPayment() {
     setProcessingPayment(true)
@@ -270,7 +273,7 @@ function InvoiceDetailModal({
         <Text style={styles.modalTitle}>{invoice.invoiceCode}</Text>
         <View style={styles.demoPaymentNotice}>
           <Text style={styles.demoPaymentNoticeTitle}>Demo Payment</Text>
-          <Text style={styles.meta}>No real transaction is processed.</Text>
+          <Text style={styles.meta}>No real transaction is verified by this system.</Text>
         </View>
         <Text style={styles.meta}>Tenant: {tenantName}</Text>
         <Text style={styles.meta}>Room: {room ? `${room.roomNumber} - ${room.roomType}` : 'Not available'}</Text>
@@ -293,10 +296,17 @@ function InvoiceDetailModal({
         <Text style={styles.meta}>Payment Status: {invoice.paymentStatus ?? (invoice.status === 'paid' ? 'paid' : 'unpaid')}</Text>
         <Text style={styles.meta}>Payment Method: {invoice.paymentMethod ?? 'Not available'}</Text>
         <Text style={styles.meta}>Payment Reference: {invoice.paymentReference ?? 'Not available'}</Text>
+        <Text style={styles.meta}>QR Provider: {invoice.qrProvider ?? 'Not available'}</Text>
         <Text style={styles.meta}>Paid At: {formatDate(invoice.paidAt)}</Text>
         <Text style={styles.meta}>Note: {invoice.note ?? 'Not available'}</Text>
         {canPay ? (
-          <PrimaryButton label="Pay with QR" onPress={() => setShowPayment(true)} />
+          <PrimaryButton
+            label="Pay with VietQR"
+            onPress={() => {
+              setQrImageFailed(false)
+              setShowPayment(true)
+            }}
+          />
         ) : null}
         <PrimaryButton label="Close" onPress={onClose} />
       </ScrollView>
@@ -304,19 +314,34 @@ function InvoiceDetailModal({
       <Modal animationType="fade" transparent visible={showPayment} onRequestClose={() => setShowPayment(false)}>
         <View style={styles.paymentBackdrop}>
           <View style={styles.paymentCard}>
-            <Text style={styles.modalTitle}>Pay with QR</Text>
+            <Text style={styles.modalTitle}>Demo VietQR Payment</Text>
             <Text style={styles.demoPaymentNoticeTitle}>Demo Payment</Text>
-            <Text style={styles.meta}>Demo payment only. No real money will be transferred.</Text>
+            <Text style={styles.meta}>Demo payment only. No real transaction is verified by this system.</Text>
             <View style={styles.qrFallbackBox}>
-              <Text style={styles.qrFallbackTitle}>QR preview unavailable in demo mobile mode.</Text>
-              <Text style={styles.qrPayload}>{qrPayload}</Text>
+              {qrImageFailed ? (
+                <>
+                  <Text style={styles.qrFallbackTitle}>QR image unavailable.</Text>
+                  <Text style={styles.qrPayload}>{vietQrUrl}</Text>
+                </>
+              ) : (
+                <Image
+                  resizeMode="contain"
+                  source={{ uri: vietQrUrl }}
+                  style={styles.vietQrImage}
+                  onError={() => setQrImageFailed(true)}
+                />
+              )}
             </View>
             <Text style={styles.meta}>Invoice Code: {invoice.invoiceCode}</Text>
-            <Text style={styles.meta}>Amount: {formatCurrency(invoice.totalAmount)}</Text>
+            <Text style={styles.meta}>Amount: {formatVndAmount(invoice.totalAmount)}</Text>
+            <Text style={styles.meta}>Bank Name: {DEMO_PAYMENT_CONFIG.bankName}</Text>
+            <Text style={styles.meta}>Account Number: {DEMO_PAYMENT_CONFIG.accountNo}</Text>
+            <Text style={styles.meta}>Account Name: {DEMO_PAYMENT_CONFIG.accountName}</Text>
+            <Text style={styles.meta}>Transfer Content: {invoice.invoiceCode}</Text>
             <Text style={styles.meta}>Due Date: {invoice.dueDate ?? 'Not available'}</Text>
             <View style={styles.actions}>
               <PrimaryButton disabled={processingPayment} label="Close" onPress={() => setShowPayment(false)} variant="secondary" />
-              <PrimaryButton disabled={processingPayment} label={processingPayment ? 'Processing...' : 'Simulate Payment Success'} onPress={() => void completeDemoPayment()} />
+              <PrimaryButton disabled={processingPayment} label={processingPayment ? 'Processing...' : 'I have completed payment (Demo)'} onPress={() => void completeDemoPayment()} />
             </View>
           </View>
         </View>
@@ -414,4 +439,5 @@ const styles = StyleSheet.create({
   qrFallbackBox: { backgroundColor: colors.background, borderColor: colors.border, borderRadius: 16, borderStyle: 'dashed', borderWidth: 1, gap: spacing.sm, padding: spacing.md },
   qrFallbackTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },
   qrPayload: { color: colors.muted, fontSize: 12, lineHeight: 18 },
+  vietQrImage: { height: 220, width: '100%' },
 })

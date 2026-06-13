@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore'
 
 import { db } from '../../../config/firebase'
+import { generateVietQRUrl } from '../../../utils/demo-payment'
 import { createNotification } from '../../notifications/services/notification.service'
 import { getUserUidByEmail } from '../../notifications/services/user-resolution.service'
 import type {
@@ -22,6 +23,7 @@ import type {
   InvoiceStatus,
   PaymentMethod,
   PaymentStatus,
+  QRProvider,
 } from '../types'
 
 const invoicesCollection = collection(db, 'invoices')
@@ -51,7 +53,23 @@ function isPaymentStatus(value: unknown): value is PaymentStatus {
 }
 
 function isPaymentMethod(value: unknown): value is PaymentMethod {
-  return value === 'manual' || value === 'demo_qr'
+  return value === 'manual' || value === 'demo_vietqr'
+}
+
+function normalizePaymentMethod(value: unknown): PaymentMethod | undefined {
+  if (isPaymentMethod(value)) {
+    return value
+  }
+
+  if (value === 'demo_qr') {
+    return 'demo_vietqr'
+  }
+
+  return undefined
+}
+
+function isQRProvider(value: unknown): value is QRProvider {
+  return value === 'vietqr_demo'
 }
 
 function getFallbackPaymentStatus(status: InvoiceStatus): PaymentStatus {
@@ -134,9 +152,7 @@ function mapInvoiceDocument(
     paymentStatus: isPaymentStatus(data.paymentStatus)
       ? data.paymentStatus
       : getFallbackPaymentStatus(status),
-    paymentMethod: isPaymentMethod(data.paymentMethod)
-      ? data.paymentMethod
-      : undefined,
+    paymentMethod: normalizePaymentMethod(data.paymentMethod),
     paymentReference:
       typeof data.paymentReference === 'string'
         ? data.paymentReference
@@ -145,6 +161,7 @@ function mapInvoiceDocument(
       data.paidAt && typeof data.paidAt === 'object'
         ? (data.paidAt as Invoice['paidAt'])
         : null,
+    qrProvider: isQRProvider(data.qrProvider) ? data.qrProvider : undefined,
     qrPayload: typeof data.qrPayload === 'string' ? data.qrPayload : null,
     note: typeof data.note === 'string' ? data.note : undefined,
     createdAt: data.createdAt,
@@ -154,6 +171,10 @@ function mapInvoiceDocument(
 
 export function buildDemoQrPayload(invoice: Invoice, tenantName: string) {
   return `BOARDING_HOUSE_AI|INVOICE:${invoice.invoiceCode}|AMOUNT:${invoice.totalAmount}|TENANT:${tenantName}`
+}
+
+export function buildDemoVietQRUrl(invoice: Pick<Invoice, 'invoiceCode' | 'totalAmount'>) {
+  return generateVietQRUrl(invoice)
 }
 
 async function getTenantNotificationProfile(
@@ -294,7 +315,7 @@ export async function markInvoiceAsPaid(invoiceId: string): Promise<void> {
   })
 }
 
-export async function simulateDemoQrInvoicePayment(
+export async function simulateDemoVietQRInvoicePayment(
   invoiceId: string,
   tenantName: string,
 ): Promise<void> {
@@ -306,16 +327,17 @@ export async function simulateDemoQrInvoicePayment(
   }
 
   const invoice = mapInvoiceDocument(invoiceSnapshot.id, invoiceSnapshot.data())
-  const paymentReference = `DEMO-${Date.now()}`
-  const qrPayload = buildDemoQrPayload(invoice, tenantName)
+  const paymentReference = `DEMO-VIETQR-${Date.now()}`
+  const qrPayload = buildDemoVietQRUrl(invoice)
 
   await updateDoc(invoiceRef, {
     status: 'paid',
     paymentStatus: 'paid',
-    paymentMethod: 'demo_qr',
+    paymentMethod: 'demo_vietqr',
     paymentReference,
     paidAmount: invoice.totalAmount,
     paidAt: serverTimestamp(),
+    qrProvider: 'vietqr_demo',
     qrPayload,
     updatedAt: serverTimestamp(),
   })
@@ -327,10 +349,15 @@ export async function simulateDemoQrInvoicePayment(
       type: 'invoice',
       priority: 'medium',
       title: 'Invoice Paid',
-      message: `${tenantName} paid invoice ${invoice.invoiceCode} via demo QR.`,
+      message: `${tenantName} completed demo VietQR payment for invoice ${invoice.invoiceCode}.`,
       actionUrl: '/owner/invoices',
+      ownerId: invoice.ownerId,
+      tenantId: invoice.tenantId,
+      status: 'unread',
     })
   } catch (notificationError) {
     console.warn('Owner invoice payment notification failed.', notificationError)
   }
 }
+
+export const simulateDemoQrInvoicePayment = simulateDemoVietQRInvoicePayment

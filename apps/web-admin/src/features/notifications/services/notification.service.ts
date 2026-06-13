@@ -51,11 +51,14 @@ function mapNotificationDocument(
   return {
     id: documentId,
     userId: String(data.userId ?? ''),
+    ownerId: typeof data.ownerId === 'string' ? data.ownerId : undefined,
+    tenantId: typeof data.tenantId === 'string' ? data.tenantId : undefined,
     role: isUserRole(data.role) ? data.role : 'tenant',
     type: isNotificationType(data.type) ? data.type : 'system',
     priority: isNotificationPriority(data.priority) ? data.priority : 'low',
     title: String(data.title ?? ''),
     message: String(data.message ?? ''),
+    status: data.status === 'read' || data.status === 'unread' ? data.status : undefined,
     read: Boolean(data.read),
     actionUrl:
       typeof data.actionUrl === 'string' ? data.actionUrl : undefined,

@@ -173,6 +173,19 @@ function getStatusCount(rows: Array<{ data: DocumentData }>, statuses: string[])
   return rows.filter((row) => statuses.includes(String(row.data.status ?? ''))).length
 }
 
+function isInvoicePaid(data: DocumentData) {
+  return data.status === 'paid' || data.paymentStatus === 'paid'
+}
+
+function isInvoiceOverdue(data: DocumentData) {
+  return data.status === 'overdue' && data.paymentStatus !== 'paid'
+}
+
+function getInvoicePaidAmount(data: DocumentData) {
+  const paidAmount = Number(data.paidAmount ?? 0)
+  return paidAmount > 0 ? paidAmount : Number(data.totalAmount ?? 0)
+}
+
 function isCurrentMonth(value: unknown) {
   const timestamp = getTimestampValue(value)
   if (!timestamp) return false
@@ -244,22 +257,22 @@ function createStatusDistribution(
 }
 
 function paidInvoiceDate(data: DocumentData) {
-  return data.updatedAt ?? data.createdAt ?? data.issueDate
+  return data.paidAt ?? data.updatedAt ?? data.createdAt ?? data.issueDate
 }
 
 export function getRevenueAnalytics(
   invoices: Array<{ id: string; data: DocumentData }>,
 ) {
-  const paidInvoices = invoices.filter((invoice) => invoice.data.status === 'paid')
+  const paidInvoices = invoices.filter((invoice) => isInvoicePaid(invoice.data))
   const monthlyGroups = groupSumBy(
     paidInvoices,
     (invoice) => getMonthKey(paidInvoiceDate(invoice.data)),
-    (invoice) => Number(invoice.data.totalAmount ?? 0),
+    (invoice) => getInvoicePaidAmount(invoice.data),
   )
   const yearlyGroups = groupSumBy(
     paidInvoices,
     (invoice) => getYearKey(paidInvoiceDate(invoice.data)),
-    (invoice) => Number(invoice.data.totalAmount ?? 0),
+    (invoice) => getInvoicePaidAmount(invoice.data),
   )
   const monthly = [...monthlyGroups.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
@@ -290,7 +303,7 @@ export function getRevenueAnalytics(
     previousMonthRevenue,
     growthPercent,
     totalRevenue: paidInvoices.reduce(
-      (sum, invoice) => sum + Number(invoice.data.totalAmount ?? 0),
+      (sum, invoice) => sum + getInvoicePaidAmount(invoice.data),
       0,
     ),
   }
@@ -336,14 +349,24 @@ export function getContractAnalytics(
 export function getInvoiceAnalytics(
   invoices: Array<{ id: string; data: DocumentData }>,
 ) {
+  const paidInvoices = invoices.filter((invoice) => isInvoicePaid(invoice.data))
+  const pendingInvoices = invoices.filter(
+    (invoice) =>
+      !isInvoicePaid(invoice.data) &&
+      ['pending', 'unpaid', 'draft'].includes(String(invoice.data.status ?? '')),
+  )
+  const overdueInvoices = invoices.filter((invoice) =>
+    isInvoiceOverdue(invoice.data),
+  )
+
   return {
-    paid: getStatusCount(invoices, ['paid']),
-    pending: getStatusCount(invoices, ['pending', 'unpaid', 'draft']),
-    overdue: getStatusCount(invoices, ['overdue']),
+    paid: paidInvoices.length,
+    pending: pendingInvoices.length,
+    overdue: overdueInvoices.length,
     byStatus: [
-      { label: 'Paid', value: getStatusCount(invoices, ['paid']) },
-      { label: 'Pending', value: getStatusCount(invoices, ['pending', 'unpaid', 'draft']) },
-      { label: 'Overdue', value: getStatusCount(invoices, ['overdue']) },
+      { label: 'Paid', value: paidInvoices.length },
+      { label: 'Pending', value: pendingInvoices.length },
+      { label: 'Overdue', value: overdueInvoices.length },
       { label: 'Cancelled', value: getStatusCount(invoices, ['cancelled']) },
     ],
   }
@@ -620,8 +643,8 @@ function getTopRooms(
         (contract) => contract.data.status === 'active',
       ).length
       const revenue = roomInvoices
-        .filter((invoice) => invoice.data.status === 'paid')
-        .reduce((sum, invoice) => sum + Number(invoice.data.totalAmount ?? 0), 0)
+        .filter((invoice) => isInvoicePaid(invoice.data))
+        .reduce((sum, invoice) => sum + getInvoicePaidAmount(invoice.data), 0)
 
       return {
         roomId: room.id,

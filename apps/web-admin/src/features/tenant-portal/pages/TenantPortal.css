@@ -272,6 +272,12 @@
   background: #ffffff;
 }
 
+.tenant-payment-qr img {
+  display: block;
+  width: min(100%, 236px);
+  height: auto;
+}
+
 .tenant-paid-date {
   display: block;
   margin-top: 6px;

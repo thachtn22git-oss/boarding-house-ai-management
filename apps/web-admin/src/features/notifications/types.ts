@@ -12,11 +12,14 @@ export type NotificationPriority = 'low' | 'medium' | 'high' | 'urgent'
 export interface Notification {
   id: string
   userId: string
+  ownerId?: string
+  tenantId?: string
   role: UserRole
   type: NotificationType
   priority: NotificationPriority
   title: string
   message: string
+  status?: 'unread' | 'read'
   read: boolean
   actionUrl?: string
   createdAt?: unknown

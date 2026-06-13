@@ -117,6 +117,11 @@
   background: #dcfce7;
 }
 
+.invoice-payment-badge--vietqr {
+  color: #1e40af;
+  background: #dbeafe;
+}
+
 .invoice-status-badge--overdue {
   color: #991b1b;
   background: #fee2e2;

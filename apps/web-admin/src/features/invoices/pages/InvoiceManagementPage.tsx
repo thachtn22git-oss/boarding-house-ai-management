@@ -15,7 +15,7 @@ import {
   deleteInvoice,
   getInvoicesByOwner,
   markInvoiceAsPaid,
-  simulateDemoQrInvoicePayment,
+  simulateDemoVietQRInvoicePayment,
   updateInvoice,
 } from '../services/invoice.service'
 import type { Invoice, InvoiceFormValues, InvoiceStatus } from '../types'
@@ -243,10 +243,10 @@ function InvoiceManagementPage() {
     setError(null)
 
     try {
-      await simulateDemoQrInvoicePayment(invoice.id, tenant?.fullName ?? 'Tenant')
+      await simulateDemoVietQRInvoicePayment(invoice.id, tenant?.fullName ?? 'Tenant')
       await loadInvoiceData()
       setViewingInvoice(null)
-      window.alert('Demo webhook processed successfully.')
+      window.alert('Demo VietQR callback processed successfully.')
     } catch {
       setError('Unable to process demo webhook. Please try again.')
     } finally {

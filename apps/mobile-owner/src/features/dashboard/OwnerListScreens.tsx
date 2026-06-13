@@ -32,6 +32,7 @@ import {
   markUtilityReadingAsBilled,
   rejectFeedback,
   resolveFeedback,
+  simulateOwnerVietQRCallback,
   updateInvoice,
   updateRoom,
   updateTenant,
@@ -56,7 +57,7 @@ import type {
   UtilityReadingStatus,
   UtilityType,
 } from '../../types/models'
-import { formatCurrency } from '../../utils/format'
+import { formatCurrency, formatDate } from '../../utils/format'
 
 function getFeedbackRecommendation(feedback: Feedback) {
   const text = `${feedback.title} ${feedback.content ?? ''} ${feedback.aiSuggestedCategory ?? feedback.category ?? ''}`.toLowerCase()
@@ -385,6 +386,11 @@ export function InvoicesScreen() {
             <Text style={styles.meta}>Billing Month: {invoice.billingMonth}</Text>
             <Text style={styles.meta}>Total Amount: {formatCurrency(invoice.totalAmount)}</Text>
             <Text style={styles.meta}>Remaining: {formatCurrency((invoice.totalAmount ?? 0) - (invoice.paidAmount ?? 0))}</Text>
+            <Text style={styles.meta}>Payment Status: {invoice.paymentStatus ?? (invoice.status === 'paid' ? 'paid' : 'unpaid')}</Text>
+            <Text style={styles.meta}>Payment Method: {invoice.paymentMethod ?? 'Not available'}</Text>
+            <Text style={styles.meta}>Payment Reference: {invoice.paymentReference ?? 'Not available'}</Text>
+            <Text style={styles.meta}>Paid Amount: {formatCurrency(invoice.paidAmount)}</Text>
+            <Text style={styles.meta}>Paid At: {formatDate(invoice.paidAt)}</Text>
             <View style={styles.actions}>
               <PrimaryButton
                 label="Edit"
@@ -396,6 +402,18 @@ export function InvoicesScreen() {
               />
               {invoice.status !== 'paid' ? (
                 <PrimaryButton label="Mark Paid" onPress={() => void markInvoiceAsPaid(invoice).then(reload)} />
+              ) : null}
+              {__DEV__ && invoice.status !== 'paid' ? (
+                <PrimaryButton
+                  label="Simulate VietQR Callback"
+                  onPress={() => {
+                    const tenant = tenants.find((item) => item.id === invoice.tenantId)
+                    void simulateOwnerVietQRCallback(invoice, tenant?.fullName ?? 'Tenant')
+                      .then(reload)
+                      .then(() => Alert.alert('Demo VietQR', 'Demo VietQR callback processed successfully.'))
+                  }}
+                  variant="secondary"
+                />
               ) : null}
               <PrimaryButton
                 label="Delete"

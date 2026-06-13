@@ -293,7 +293,17 @@ function isAvailableStatus(status: unknown) {
   return status === 'available' || status === 'vacant' || status === 'empty'
 }
 
+function isInvoicePaid(data: DocumentData) {
+  return data.status === 'paid' || data.paymentStatus === 'paid'
+}
+
+function getInvoicePaidAmount(data: DocumentData) {
+  const paidAmount = Number(data.paidAmount ?? 0)
+  return paidAmount > 0 ? paidAmount : Number(data.totalAmount ?? 0)
+}
+
 function isInvoiceOverdue(data: DocumentData) {
+  if (data.paymentStatus === 'paid') return false
   if (data.status === 'overdue') return true
   if (data.status === 'paid') return false
 
@@ -390,11 +400,11 @@ async function answerMonthlyRevenue(ownerId: string) {
   const invoices = await getOwnerRows('invoices', ownerId)
   const paidThisMonth = invoices.filter(
     (invoice) =>
-      invoice.data.status === 'paid' &&
-      isCurrentMonth(invoice.data.updatedAt ?? invoice.data.issueDate ?? invoice.data.createdAt),
+      isInvoicePaid(invoice.data) &&
+      isCurrentMonth(invoice.data.paidAt ?? invoice.data.updatedAt ?? invoice.data.issueDate ?? invoice.data.createdAt),
   )
   const revenue = paidThisMonth.reduce(
-    (sum, invoice) => sum + Number(invoice.data.totalAmount ?? 0),
+    (sum, invoice) => sum + getInvoicePaidAmount(invoice.data),
     0,
   )
 

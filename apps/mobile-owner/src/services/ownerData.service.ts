@@ -11,6 +11,7 @@ import {
   where,
 } from 'firebase/firestore'
 import { db } from '../config/firebase'
+import { generateVietQRUrl } from '../utils/demo-payment'
 import type {
   Contract,
   Feedback,
@@ -43,8 +44,8 @@ export async function getOwnerDashboard(ownerId: string) {
   ])
 
   const monthlyRevenue = invoices
-    .filter((invoice) => invoice.status === 'paid' && isCurrentBillingMonth(invoice.billingMonth))
-    .reduce((total, invoice) => total + (invoice.totalAmount ?? 0), 0)
+    .filter((invoice) => isInvoicePaid(invoice) && isCurrentInvoicePaymentMonth(invoice))
+    .reduce((total, invoice) => total + getInvoicePaidAmount(invoice), 0)
 
   return {
     totalRooms: rooms.length,
@@ -157,6 +158,40 @@ export async function markInvoiceAsPaid(invoice: Invoice) {
   })
 }
 
+export async function simulateOwnerVietQRCallback(invoice: Invoice, tenantName = 'Tenant') {
+  await updateDoc(doc(db, 'invoices', invoice.id), {
+    status: 'paid',
+    paymentStatus: 'paid',
+    paymentMethod: 'demo_vietqr',
+    paymentReference: `DEMO-VIETQR-${Date.now()}`,
+    paidAmount: invoice.totalAmount ?? 0,
+    paidAt: serverTimestamp(),
+    qrProvider: 'vietqr_demo',
+    qrPayload: generateVietQRUrl(invoice),
+    updatedAt: serverTimestamp(),
+  })
+
+  try {
+    await addDoc(collection(db, 'notifications'), {
+      userId: invoice.ownerId,
+      ownerId: invoice.ownerId,
+      tenantId: invoice.tenantId,
+      role: 'owner',
+      type: 'invoice',
+      priority: 'medium',
+      title: 'Invoice Paid',
+      message: `${tenantName} completed demo VietQR payment for invoice ${invoice.invoiceCode}.`,
+      read: false,
+      status: 'unread',
+      actionUrl: '/owner/invoices',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  } catch (notificationError) {
+    console.warn('Owner invoice payment notification failed.', notificationError)
+  }
+}
+
 export async function deleteInvoice(invoiceId: string) {
   await deleteDoc(doc(db, 'invoices', invoiceId))
 }
@@ -230,6 +265,25 @@ function isCurrentBillingMonth(billingMonth?: string) {
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
   return billingMonth.startsWith(currentMonth)
+}
+
+function isCurrentInvoicePaymentMonth(invoice: Invoice) {
+  if (invoice.paidAt && typeof invoice.paidAt === 'object' && 'toDate' in invoice.paidAt) {
+    const date = (invoice.paidAt as { toDate: () => Date }).toDate()
+    const now = new Date()
+
+    return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()
+  }
+
+  return isCurrentBillingMonth(invoice.billingMonth)
+}
+
+function isInvoicePaid(invoice: Invoice) {
+  return invoice.status === 'paid' || invoice.paymentStatus === 'paid'
+}
+
+function getInvoicePaidAmount(invoice: Invoice) {
+  return Number(invoice.paidAmount || invoice.totalAmount || 0)
 }
 
 function calculateInvoiceTotals(items: InvoiceItem[], discount = 0) {

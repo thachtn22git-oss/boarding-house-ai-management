@@ -74,6 +74,7 @@ function InvoiceViewModal({
   const remainingAmount = Math.max(invoice.totalAmount - invoice.paidAmount, 0)
   const canSimulateWebhook =
     import.meta.env.DEV && invoice.status !== 'paid' && invoice.status !== 'cancelled'
+  const paymentStatus = invoice.paymentStatus ?? (invoice.status === 'paid' ? 'paid' : 'unpaid')
 
   return (
     <div className="room-modal-backdrop" role="presentation">
@@ -140,11 +141,19 @@ function InvoiceViewModal({
             </div>
             <div>
               <dt>Payment status</dt>
-              <dd>{invoice.paymentStatus ?? (invoice.status === 'paid' ? 'paid' : 'unpaid')}</dd>
+              <dd>{paymentStatus}</dd>
             </div>
             <div>
               <dt>Payment method</dt>
-              <dd>{invoice.paymentMethod ?? '-'}</dd>
+              <dd>
+                {invoice.paymentMethod === 'demo_vietqr' ? (
+                  <span className="status-badge invoice-payment-badge--vietqr">
+                    Demo VietQR
+                  </span>
+                ) : (
+                  invoice.paymentMethod ?? '-'
+                )}
+              </dd>
             </div>
             <div>
               <dt>Payment reference</dt>
@@ -153,6 +162,10 @@ function InvoiceViewModal({
             <div>
               <dt>Paid at</dt>
               <dd>{formatPaymentDate(invoice.paidAt)}</dd>
+            </div>
+            <div>
+              <dt>QR provider</dt>
+              <dd>{invoice.qrProvider ?? '-'}</dd>
             </div>
           </dl>
 
@@ -226,7 +239,7 @@ function InvoiceViewModal({
               onClick={onSimulatePaymentWebhook}
               disabled={processingWebhook}
             >
-              {processingWebhook ? 'Processing...' : 'Simulate Payment Webhook'}
+              {processingWebhook ? 'Processing...' : 'Simulate VietQR Callback'}
             </button>
           ) : null}
         </div>

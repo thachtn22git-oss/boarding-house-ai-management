@@ -3,7 +3,8 @@ export type TenantStatus = 'active' | 'inactive' | 'pending'
 export type ContractStatus = 'active' | 'expired' | 'terminated' | 'pending'
 export type InvoiceStatus = 'draft' | 'unpaid' | 'paid' | 'overdue' | 'cancelled'
 export type PaymentStatus = 'unpaid' | 'pending' | 'paid' | 'failed'
-export type PaymentMethod = 'manual' | 'demo_qr'
+export type PaymentMethod = 'manual' | 'demo_vietqr'
+export type QRProvider = 'vietqr_demo'
 export type UtilityType = 'electricity' | 'water'
 export type UtilityReadingStatus = 'draft' | 'confirmed' | 'billed'
 export type FeedbackStatus = 'new' | 'in_review' | 'resolved' | 'rejected'
@@ -85,6 +86,7 @@ export interface Invoice {
   paymentMethod?: PaymentMethod
   paymentReference?: string
   paidAt?: unknown
+  qrProvider?: QRProvider
   qrPayload?: string | null
   note?: string
 }

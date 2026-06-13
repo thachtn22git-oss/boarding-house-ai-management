@@ -1,5 +1,6 @@
 import { addDoc, collection, doc, getDoc, getDocs, limit, query, serverTimestamp, updateDoc, where } from 'firebase/firestore'
 import { db } from '../config/firebase'
+import { generateVietQRUrl } from '../utils/demo-payment'
 import type {
   Contract,
   Feedback,
@@ -42,6 +43,10 @@ function mapDoc<T>(item: { id: string; data: () => Record<string, unknown> }) {
 
 export function buildDemoQrPayload(invoice: Invoice, tenantName: string) {
   return `BOARDING_HOUSE_AI|INVOICE:${invoice.invoiceCode}|AMOUNT:${invoice.totalAmount}|TENANT:${tenantName}`
+}
+
+export function buildDemoVietQRUrl(invoice: Pick<Invoice, 'invoiceCode' | 'totalAmount'>) {
+  return generateVietQRUrl(invoice)
 }
 
 export async function getCurrentTenant(currentUser: AppUser): Promise<TenantPortalData> {
@@ -171,16 +176,17 @@ export async function simulateTenantInvoiceDemoPayment(
   invoice: Invoice,
   tenantName: string,
 ) {
-  const paymentReference = `DEMO-${Date.now()}`
-  const qrPayload = buildDemoQrPayload(invoice, tenantName)
+  const paymentReference = `DEMO-VIETQR-${Date.now()}`
+  const qrPayload = buildDemoVietQRUrl(invoice)
 
   await updateDoc(doc(db, 'invoices', invoice.id), {
     status: 'paid',
     paymentStatus: 'paid',
-    paymentMethod: 'demo_qr',
+    paymentMethod: 'demo_vietqr',
     paymentReference,
     paidAmount: invoice.totalAmount ?? 0,
     paidAt: serverTimestamp(),
+    qrProvider: 'vietqr_demo',
     qrPayload,
     updatedAt: serverTimestamp(),
   })
@@ -192,8 +198,11 @@ export async function simulateTenantInvoiceDemoPayment(
       type: 'invoice',
       priority: 'medium',
       title: 'Invoice Paid',
-      message: `${tenantName} paid invoice ${invoice.invoiceCode} via demo QR.`,
+      message: `${tenantName} completed demo VietQR payment for invoice ${invoice.invoiceCode}.`,
       read: false,
+      ownerId: invoice.ownerId,
+      tenantId: invoice.tenantId,
+      status: 'unread',
       actionUrl: '/owner/invoices',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),

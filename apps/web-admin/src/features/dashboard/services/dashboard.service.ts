@@ -164,6 +164,19 @@ function isContractExpiring(endDate: unknown) {
   return endTime >= now.getTime() && endTime <= inThirtyDays.getTime()
 }
 
+function isInvoicePaid(data: DocumentData) {
+  return data.status === 'paid' || data.paymentStatus === 'paid'
+}
+
+function isInvoiceOverdue(data: DocumentData) {
+  return data.status === 'overdue' && data.paymentStatus !== 'paid'
+}
+
+function getInvoicePaidAmount(data: DocumentData) {
+  const paidAmount = Number(data.paidAmount ?? 0)
+  return paidAmount > 0 ? paidAmount : Number(data.totalAmount ?? 0)
+}
+
 function createActivity(
   document: DashboardDocument,
   type: DashboardActivity['type'],
@@ -260,12 +273,14 @@ export async function getOwnerDashboardStats(
   const maintenanceRooms = rooms.filter(
     (room) => room.data.status === 'maintenance',
   ).length
-  const paidInvoices = invoices.filter((invoice) => invoice.data.status === 'paid')
+  const paidInvoices = invoices.filter((invoice) => isInvoicePaid(invoice.data))
   const unpaidInvoices = invoices.filter(
-    (invoice) => invoice.data.status === 'unpaid',
+    (invoice) =>
+      !isInvoicePaid(invoice.data) &&
+      (invoice.data.status === 'unpaid' || invoice.data.paymentStatus === 'unpaid'),
   )
-  const overdueInvoices = invoices.filter(
-    (invoice) => invoice.data.status === 'overdue',
+  const overdueInvoices = invoices.filter((invoice) =>
+    isInvoiceOverdue(invoice.data),
   )
 
   const baseStats = {
@@ -287,8 +302,10 @@ export async function getOwnerDashboardStats(
     unpaidInvoices: unpaidInvoices.length,
     overdueInvoices: overdueInvoices.length,
     monthlyRevenue: paidInvoices
-      .filter((invoice) => isCurrentMonth(invoice.data.updatedAt ?? invoice.data.createdAt))
-      .reduce((sum, invoice) => sum + Number(invoice.data.totalAmount ?? 0), 0),
+      .filter((invoice) =>
+        isCurrentMonth(invoice.data.paidAt ?? invoice.data.updatedAt ?? invoice.data.createdAt),
+      )
+      .reduce((sum, invoice) => sum + getInvoicePaidAmount(invoice.data), 0),
     pendingAmount: [...unpaidInvoices, ...overdueInvoices].reduce(
       (sum, invoice) =>
         sum +

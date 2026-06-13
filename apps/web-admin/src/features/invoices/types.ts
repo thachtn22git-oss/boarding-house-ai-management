@@ -2,7 +2,8 @@ import type { Timestamp } from 'firebase/firestore'
 
 export type InvoiceStatus = 'draft' | 'unpaid' | 'paid' | 'overdue' | 'cancelled'
 export type PaymentStatus = 'unpaid' | 'pending' | 'paid' | 'failed'
-export type PaymentMethod = 'manual' | 'demo_qr'
+export type PaymentMethod = 'manual' | 'demo_vietqr'
+export type QRProvider = 'vietqr_demo'
 
 export interface InvoiceItem {
   id: string
@@ -32,6 +33,7 @@ export interface Invoice {
   paymentMethod?: PaymentMethod
   paymentReference?: string
   paidAt?: Timestamp | null
+  qrProvider?: QRProvider
   qrPayload?: string | null
   note?: string
   createdAt?: unknown

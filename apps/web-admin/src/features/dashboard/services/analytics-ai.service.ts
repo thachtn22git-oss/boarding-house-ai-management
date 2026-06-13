@@ -179,18 +179,32 @@ function createInsight(
 
 function getPaidRevenue(invoices: AnalyticsDocument[], monthWindow?: MonthWindow) {
   return invoices
-    .filter((invoice) => invoice.data.status === 'paid')
+    .filter((invoice) => isInvoicePaid(invoice.data))
     .filter((invoice) =>
       monthWindow
         ? isSameMonth(
-            invoice.data.billingMonth ??
+            invoice.data.paidAt ??
+              invoice.data.billingMonth ??
               invoice.data.updatedAt ??
               invoice.data.createdAt,
             monthWindow,
           )
         : true,
     )
-    .reduce((sum, invoice) => sum + Number(invoice.data.totalAmount ?? 0), 0)
+    .reduce((sum, invoice) => sum + getInvoicePaidAmount(invoice.data), 0)
+}
+
+function isInvoicePaid(data: DocumentData) {
+  return data.status === 'paid' || data.paymentStatus === 'paid'
+}
+
+function isInvoiceOverdue(data: DocumentData) {
+  return data.status === 'overdue' && data.paymentStatus !== 'paid'
+}
+
+function getInvoicePaidAmount(data: DocumentData) {
+  const paidAmount = Number(data.paidAmount ?? 0)
+  return paidAmount > 0 ? paidAmount : Number(data.totalAmount ?? 0)
 }
 
 function getFeedbackCategory(feedback: AnalyticsDocument) {
@@ -380,8 +394,8 @@ export function generateInsights(collections: AnalyticsCollections): AIInsight[]
   const maintenanceRequests = collections.feedbacks.filter(
     (feedback) => getRecommendationFromData(feedback.data).actionLabel === 'Maintenance Inspection',
   )
-  const overdueInvoices = collections.invoices.filter(
-    (invoice) => invoice.data.status === 'overdue',
+  const overdueInvoices = collections.invoices.filter((invoice) =>
+    isInvoiceOverdue(invoice.data),
   )
 
   if (internetTrend && internetTrend.direction === 'up' && internetTrend.percentage >= 20) {
@@ -474,8 +488,8 @@ export function generateRecommendations(
       getRecommendationFromData(feedback.data).actionLabel === 'Maintenance Inspection',
   )
   const expiringContracts = getExpiringContracts(collections.contracts)
-  const overdueInvoices = collections.invoices.filter(
-    (invoice) => invoice.data.status === 'overdue',
+  const overdueInvoices = collections.invoices.filter((invoice) =>
+    isInvoiceOverdue(invoice.data),
   )
   const highUtilityReadings = collections.utilityReadings.filter(
     (reading) => Number(reading.data.totalAmount ?? 0) > 0,
@@ -544,8 +558,8 @@ export function generateRecommendations(
 export function generatePriorityCenter(
   collections: AnalyticsCollections,
 ): PriorityCenter {
-  const overdueInvoices = collections.invoices.filter(
-    (invoice) => invoice.data.status === 'overdue',
+  const overdueInvoices = collections.invoices.filter((invoice) =>
+    isInvoiceOverdue(invoice.data),
   )
   const unresolvedMaintenance = collections.feedbacks.filter((feedback) => {
     const status = feedback.data.status

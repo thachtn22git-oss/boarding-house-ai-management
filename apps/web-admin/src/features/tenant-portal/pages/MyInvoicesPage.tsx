@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
-import { QRCodeSVG } from 'qrcode.react'
 
 import { DashboardSection, StatCard } from '../../../components/dashboard'
+import { DEMO_PAYMENT_CONFIG } from '../../../config/demo-payment'
+import { formatVndAmount, generateVietQRUrl } from '../../../utils/demo-payment'
 import { formatCurrency, formatDate } from '../../../utils/format'
 import {
-  buildDemoQrPayload,
-  simulateDemoQrInvoicePayment,
+  simulateDemoVietQRInvoicePayment,
 } from '../../invoices/services/invoice.service'
 import type { Invoice } from '../../invoices/types'
 import TenantPortalStateView from './TenantPortalStateView'
@@ -116,7 +116,7 @@ function TenantInvoiceViewModal({
               type="button"
               onClick={() => onPay(invoice)}
             >
-              Pay with QR
+              Pay with VietQR
             </button>
           ) : null}
         </div>
@@ -127,18 +127,16 @@ function TenantInvoiceViewModal({
 
 function DemoQrPaymentModal({
   invoice,
-  tenantName,
   processing,
   onClose,
   onSuccess,
 }: {
   invoice: Invoice
-  tenantName: string
   processing: boolean
   onClose: () => void
   onSuccess: () => void
 }) {
-  const qrPayload = buildDemoQrPayload(invoice, tenantName)
+  const vietQrUrl = generateVietQRUrl(invoice)
 
   return (
     <div className="room-modal-backdrop" role="presentation">
@@ -151,7 +149,7 @@ function DemoQrPaymentModal({
         <div className="room-modal-header">
           <div>
             <p className="page-eyebrow">Demo Payment</p>
-            <h2 id="tenant-payment-title">Pay with QR</h2>
+            <h2 id="tenant-payment-title">Demo VietQR Payment</h2>
           </div>
           <button
             className="room-modal-close"
@@ -165,12 +163,12 @@ function DemoQrPaymentModal({
         </div>
 
         <div className="demo-payment-warning">
-          Demo payment only. No real money will be transferred.
+          This is a demo payment flow. No real transaction is verified automatically.
         </div>
 
         <div className="tenant-payment-grid">
           <div className="tenant-payment-qr">
-            <QRCodeSVG value={qrPayload} size={196} />
+            <img src={vietQrUrl} alt="Demo VietQR payment code" />
           </div>
           <dl className="tenant-detail-list">
             <div>
@@ -179,15 +177,27 @@ function DemoQrPaymentModal({
             </div>
             <div>
               <dt>Amount</dt>
-              <dd>{formatCurrency(invoice.totalAmount)}</dd>
+              <dd>{formatVndAmount(invoice.totalAmount)}</dd>
+            </div>
+            <div>
+              <dt>Bank Name</dt>
+              <dd>{DEMO_PAYMENT_CONFIG.bankName}</dd>
+            </div>
+            <div>
+              <dt>Account Number</dt>
+              <dd>{DEMO_PAYMENT_CONFIG.accountNo}</dd>
+            </div>
+            <div>
+              <dt>Account Name</dt>
+              <dd>{DEMO_PAYMENT_CONFIG.accountName}</dd>
             </div>
             <div>
               <dt>Due Date</dt>
               <dd>{invoice.dueDate}</dd>
             </div>
             <div className="tenant-detail-long">
-              <dt>QR Payload</dt>
-              <dd>{qrPayload}</dd>
+              <dt>Transfer Content</dt>
+              <dd>{invoice.invoiceCode}</dd>
             </div>
           </dl>
         </div>
@@ -207,7 +217,7 @@ function DemoQrPaymentModal({
             onClick={onSuccess}
             disabled={processing}
           >
-            {processing ? 'Processing...' : 'Simulate Payment Success'}
+            {processing ? 'Processing...' : 'I have completed payment (Demo)'}
           </button>
         </div>
       </section>
@@ -242,10 +252,10 @@ function MyInvoicesPage() {
     setSuccessMessage('')
 
     try {
-      await simulateDemoQrInvoicePayment(paymentInvoice.id, tenantName)
+      await simulateDemoVietQRInvoicePayment(paymentInvoice.id, tenantName)
       setPaymentInvoice(null)
       setSelectedInvoice(null)
-      setSuccessMessage('Demo payment completed. Invoice marked as paid.')
+      setSuccessMessage('Demo VietQR payment completed. Invoice marked as paid.')
       await reload()
     } catch {
       setSuccessMessage('Unable to complete demo payment. Please try again.')
@@ -362,7 +372,7 @@ function MyInvoicesPage() {
                             type="button"
                             onClick={() => setPaymentInvoice(invoice)}
                           >
-                            Pay
+                            Pay with VietQR
                           </button>
                         ) : null}
                       </div>
@@ -386,7 +396,6 @@ function MyInvoicesPage() {
       {paymentInvoice ? (
         <DemoQrPaymentModal
           invoice={paymentInvoice}
-          tenantName={tenantName}
           processing={processingPayment}
           onClose={() => {
             if (!processingPayment) {

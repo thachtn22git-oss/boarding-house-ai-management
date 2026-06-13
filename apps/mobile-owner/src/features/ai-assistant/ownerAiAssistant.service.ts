@@ -130,6 +130,19 @@ function getRecommendationAction(data: DocumentData) {
   return 'General Review'
 }
 
+function isInvoicePaid(data: DocumentData) {
+  return data.status === 'paid' || data.paymentStatus === 'paid'
+}
+
+function isInvoiceOverdue(data: DocumentData) {
+  return data.status === 'overdue' && data.paymentStatus !== 'paid'
+}
+
+function getInvoicePaidAmount(data: DocumentData) {
+  const paidAmount = Number(data.paidAmount ?? 0)
+  return paidAmount > 0 ? paidAmount : Number(data.totalAmount ?? 0)
+}
+
 function list(items: string[]) {
   return items.map((item) => `- ${item}`).join('\n')
 }
@@ -193,14 +206,14 @@ async function generateOwnerAnswer(ownerId: string, intent: AssistantIntent) {
 
   if (intent === 'monthly_revenue') {
     const invoices = await getOwnerRows('invoices', ownerId)
-    const paidThisMonth = invoices.filter((invoice) => invoice.data.status === 'paid' && isCurrentMonth(invoice.data.updatedAt ?? invoice.data.issueDate ?? invoice.data.createdAt))
-    const total = paidThisMonth.reduce((sum, invoice) => sum + Number(invoice.data.totalAmount ?? 0), 0)
+    const paidThisMonth = invoices.filter((invoice) => isInvoicePaid(invoice.data) && isCurrentMonth(invoice.data.paidAt ?? invoice.data.updatedAt ?? invoice.data.issueDate ?? invoice.data.createdAt))
+    const total = paidThisMonth.reduce((sum, invoice) => sum + getInvoicePaidAmount(invoice.data), 0)
     answer = `Your paid revenue this month is ${formatCurrency(total)} from ${paidThisMonth.length} paid invoice(s).`
   }
 
   if (intent === 'overdue_invoices') {
     const invoices = await getOwnerRows('invoices', ownerId)
-    const overdue = invoices.filter((invoice) => invoice.data.status === 'overdue')
+    const overdue = invoices.filter((invoice) => isInvoiceOverdue(invoice.data))
     answer = overdue.length
       ? `There are ${overdue.length} overdue invoices:\n${list(overdue.slice(0, 10).map((invoice) => `${String(invoice.data.invoiceCode ?? invoice.id)}: ${formatCurrency(Number(invoice.data.totalAmount ?? 0))}`))}`
       : 'There are no overdue invoices right now.'
