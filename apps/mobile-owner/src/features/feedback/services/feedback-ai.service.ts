@@ -15,6 +15,8 @@ export type FeedbackAIResult = {
   sentiment: SentimentLabel
   priority: FeedbackPriority
   summary: string
+  suggestedResolution: string
+  suggestedReply: string
   confidence: FeedbackAIConfidence
 }
 
@@ -99,6 +101,14 @@ export async function analyzeFeedbackWithAI(
       sentiment: payload.sentiment,
       priority: payload.priority,
       summary: typeof payload.summary === 'string' ? payload.summary : '',
+      suggestedResolution:
+        typeof payload.suggested_resolution === 'string'
+          ? payload.suggested_resolution
+          : '',
+      suggestedReply:
+        typeof payload.suggested_reply === 'string'
+          ? payload.suggested_reply
+          : '',
       confidence: getConfidence(payload.confidence),
     }
   } catch (error) {

@@ -18,6 +18,9 @@ export type AssistantIntent =
   | 'expiring_contracts'
   | 'urgent_feedback'
   | 'feedback_summary'
+  | 'feedback_actions'
+  | 'maintenance_issues'
+  | 'resolution_statistics'
   | 'utility_summary'
   | 'tenant_count'
   | 'unknown'
@@ -68,8 +71,11 @@ export function detectAssistantIntent(question: string): AssistantIntent {
   if (text.includes('revenue this month') || text.includes('monthly revenue') || text.includes('earn this month') || text.includes('earned this month')) return 'monthly_revenue'
   if ((hasInvoiceKeyword && hasOverdueKeyword) || text.includes('who has not paid') || text.includes('late payments') || text.includes('unpaid bills') || text.includes('overdue bills')) return 'overdue_invoices'
   if (text.includes('expire soon') || text.includes('expiring') || text.includes('ending soon') || text.includes('expiring this month')) return 'expiring_contracts'
-  if (text.includes('urgent feedback') || text.includes('needs attention') || text.includes('serious complaint') || text.includes('serious complaints')) return 'urgent_feedback'
+  if (text.includes('urgent feedback') || text.includes('needs attention') || text.includes('immediate action') || text.includes('serious complaint') || text.includes('serious complaints')) return 'urgent_feedback'
   if (text.includes('main tenant complaints') || text.includes('summarize feedback') || text.includes('common issues') || text.includes('feedback summary')) return 'feedback_summary'
+  if (text.includes('what actions should i take') || text.includes('recommended resolutions') || text.includes('recommended actions') || text.includes('actions for tenant complaints')) return 'feedback_actions'
+  if (text.includes('common maintenance issues') || text.includes('most common maintenance issues') || text.includes('maintenance complaints')) return 'maintenance_issues'
+  if (text.includes('resolution statistics') || text.includes('resolution stats') || text.includes('summarize ai resolution')) return 'resolution_statistics'
   if (text.includes('electricity usage') || text.includes('water usage') || text.includes('utility cost') || text.includes('utility summary')) return 'utility_summary'
   if (text.includes('how many tenants') || text.includes('tenant count') || text.includes('active tenants')) return 'tenant_count'
 
@@ -111,6 +117,19 @@ function formatLabel(value: unknown) {
     .join(' ')
 }
 
+function getRecommendationAction(data: DocumentData) {
+  const text = `${String(data.title ?? '')} ${String(data.content ?? '')} ${String(data.aiSuggestedCategory ?? data.category ?? '')}`.toLowerCase()
+
+  if (['leak', 'water', 'pipe', 'bathroom', 'toilet', 'door', 'window', 'broken', 'repair'].some((keyword) => text.includes(keyword))) return 'Maintenance Inspection'
+  if (['wifi', 'internet', 'network', 'signal', 'slow internet'].some((keyword) => text.includes(keyword))) return 'Network Check'
+  if (['electricity', 'power', 'light', 'socket', 'switch'].some((keyword) => text.includes(keyword))) return 'Electrical Inspection'
+  if (['water pressure', 'water supply', 'no water', 'dirty water'].some((keyword) => text.includes(keyword))) return 'Water Supply Review'
+  if (['noise', 'loud', 'party', 'disturbing'].some((keyword) => text.includes(keyword))) return 'Noise Review'
+  if (['security', 'theft', 'suspicious', 'unsafe'].some((keyword) => text.includes(keyword))) return 'Security Review'
+
+  return 'General Review'
+}
+
 function list(items: string[]) {
   return items.map((item) => `- ${item}`).join('\n')
 }
@@ -149,6 +168,9 @@ function getConversationTitle(intent: AssistantIntent, question: string) {
   if (intent === 'monthly_revenue' || text.includes('revenue')) return 'Revenue Analysis'
   if (intent === 'overdue_invoices' || text.includes('overdue')) return 'Overdue Invoices'
   if (intent === 'feedback_summary' || text.includes('complaint')) return 'Tenant Complaints'
+  if (intent === 'feedback_actions') return 'Feedback Actions'
+  if (intent === 'maintenance_issues') return 'Maintenance Issues'
+  if (intent === 'resolution_statistics') return 'Resolution Statistics'
   if (intent === 'room_availability') return 'Room Availability'
   if (intent === 'expiring_contracts') return 'Expiring Contracts'
   if (intent === 'urgent_feedback') return 'Feedback Review'
@@ -231,6 +253,43 @@ async function generateOwnerAnswer(ownerId: string, intent: AssistantIntent) {
     const tenants = await getOwnerRows('tenants', ownerId)
     const active = tenants.filter((tenant) => tenant.data.status === 'active')
     answer = `You have ${tenants.length} tenant(s), including ${active.length} active tenant(s).`
+  }
+
+  if (intent === 'feedback_actions') {
+    const feedbacks = (await getOwnerRows('feedbacks', ownerId)).filter((feedback) => {
+      const status = String(feedback.data.status ?? 'new')
+      return status === 'new' || status === 'in_review'
+    })
+    const actionCounts = new Map<string, number>()
+    feedbacks.forEach((feedback) => {
+      const action = getRecommendationAction(feedback.data)
+      actionCounts.set(action, (actionCounts.get(action) ?? 0) + 1)
+    })
+    const actions = [...actionCounts.entries()].sort((left, right) => right[1] - left[1]).slice(0, 5)
+    answer = actions.length
+      ? `Recommended actions for current tenant complaints:\n${actions.map(([action, count]) => `- ${action}: ${count} feedback item(s)`).join('\n')}`
+      : 'There are no unresolved feedback actions right now.'
+  }
+
+  if (intent === 'maintenance_issues') {
+    const feedbacks = await getOwnerRows('feedbacks', ownerId)
+    const maintenance = feedbacks.filter((feedback) => getRecommendationAction(feedback.data) === 'Maintenance Inspection' || feedback.data.category === 'maintenance' || feedback.data.aiSuggestedCategory === 'maintenance')
+    answer = maintenance.length
+      ? `${maintenance.length} maintenance-related feedback item(s) were found:\n${maintenance.slice(0, 8).map((feedback) => `- ${String(feedback.data.title ?? feedback.id)}`).join('\n')}`
+      : 'No maintenance-related feedback has been detected yet.'
+  }
+
+  if (intent === 'resolution_statistics') {
+    const feedbacks = await getOwnerRows('feedbacks', ownerId)
+    const actionCounts = new Map<string, number>()
+    feedbacks.forEach((feedback) => {
+      const action = getRecommendationAction(feedback.data)
+      actionCounts.set(action, (actionCounts.get(action) ?? 0) + 1)
+    })
+    const rows = [...actionCounts.entries()].sort((left, right) => right[1] - left[1]).slice(0, 6)
+    answer = rows.length
+      ? `AI resolution statistics:\n${rows.map(([action, count]) => `- ${action}: ${count}`).join('\n')}`
+      : 'No AI resolution statistics are available yet.'
   }
 
   return answer

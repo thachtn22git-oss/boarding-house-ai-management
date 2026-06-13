@@ -37,6 +37,8 @@ export interface Feedback {
   aiConfidence?: FeedbackAIConfidence | null
   aiError?: string | null
   aiSummary?: string | null
+  aiSuggestedResolution?: string | null
+  aiSuggestedReply?: string | null
   ownerResponse?: string
   createdAt?: unknown
   updatedAt?: unknown

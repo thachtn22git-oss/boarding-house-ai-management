@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore'
 
 import { db } from '../../../config/firebase'
+import { getRecommendationFromData } from '../../feedbacks/feedback.recommendation-rules'
 import { formatCurrency, formatDate } from '../../../utils/format'
 
 export type DashboardActivity = {
@@ -51,6 +52,7 @@ export type OwnerDashboardStats = {
   vacantRate: number
   recentActivities: DashboardActivity[]
   aiInsights: DashboardInsight[]
+  aiRecommendations: DashboardInsight[]
 }
 
 type DashboardDocument = {
@@ -227,7 +229,7 @@ function createActivities(collections: {
     .slice(0, 6)
 }
 
-function createInsights(stats: Omit<OwnerDashboardStats, 'recentActivities' | 'aiInsights'>) {
+function createInsights(stats: Omit<OwnerDashboardStats, 'recentActivities' | 'aiInsights' | 'aiRecommendations'>) {
   const insights: DashboardInsight[] = []
 
   if (stats.occupancyRate >= 80) {
@@ -285,6 +287,65 @@ function createInsights(stats: Omit<OwnerDashboardStats, 'recentActivities' | 'a
   }
 
   return insights
+}
+
+function createAIRecommendations(feedbacks: DashboardDocument[]): DashboardInsight[] {
+  const recommendations: DashboardInsight[] = []
+  const actionCounts = new Map<string, number>()
+  const unresolvedHighPriority = feedbacks.filter((feedback) => {
+    const priority = feedback.data.priority ?? feedback.data.aiSuggestedPriority
+    const status = feedback.data.status
+
+    return (priority === 'high' || priority === 'urgent') && status !== 'resolved' && status !== 'rejected'
+  })
+
+  feedbacks.forEach((feedback) => {
+    const action = getRecommendationFromData(feedback.data).actionLabel
+    actionCounts.set(action, (actionCounts.get(action) ?? 0) + 1)
+  })
+
+  const maintenanceCount = actionCounts.get('Maintenance Inspection') ?? 0
+  if (maintenanceCount >= 3) {
+    recommendations.push({
+      id: 'maintenance-inspection',
+      title: `${maintenanceCount} maintenance complaints reported`,
+      description: 'Consider scheduling a building inspection.',
+      severity: 'warning',
+    })
+  }
+
+  const networkCount = actionCounts.get('Network Check') ?? 0
+  if (networkCount > 0) {
+    recommendations.push({
+      id: 'network-check',
+      title: 'Internet complaints detected',
+      description: 'Check networking equipment and signal quality.',
+      severity: 'info',
+    })
+  }
+
+  if (unresolvedHighPriority.length > 0) {
+    recommendations.push({
+      id: 'urgent-feedback-actions',
+      title: 'High-priority feedback remains unresolved',
+      description: `Review ${unresolvedHighPriority.length} urgent or high-priority request(s).`,
+      severity: 'danger',
+    })
+  }
+
+  if (recommendations.length === 0 && feedbacks.length > 0) {
+    const [topAction, count] = [...actionCounts.entries()]
+      .sort((left, right) => right[1] - left[1])[0] ?? ['General Review', feedbacks.length]
+
+    recommendations.push({
+      id: 'top-feedback-action',
+      title: `${topAction} recommended`,
+      description: `${count} feedback item(s) suggest this action.`,
+      severity: 'info',
+    })
+  }
+
+  return recommendations.slice(0, 4)
 }
 
 export async function getOwnerDashboardStats(
@@ -371,5 +432,6 @@ export async function getOwnerDashboardStats(
       feedbacks,
     }),
     aiInsights: createInsights(baseStats),
+    aiRecommendations: createAIRecommendations(feedbacks),
   }
 }

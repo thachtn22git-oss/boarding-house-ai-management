@@ -122,6 +122,8 @@ export interface Feedback {
   aiSummary?: string | null
   aiSuggestedCategory?: FeedbackCategory | null
   aiSuggestedPriority?: FeedbackPriority | null
+  aiSuggestedResolution?: string | null
+  aiSuggestedReply?: string | null
   aiConfidence?: FeedbackAIConfidence | null
   aiError?: string | null
   createdAt?: unknown

@@ -98,6 +98,7 @@ export type AnalyticsData = {
     categoryDistribution: ChartPoint[]
     priorityDistribution: ChartPoint[]
     statusByPriority: ChartPoint[]
+    recommendedActions: ChartPoint[]
   }
   utilities: {
     trend: UtilityTrendPoint[]

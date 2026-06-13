@@ -37,6 +37,10 @@ const suggestions = [
   'What are the main tenant complaints?',
   'How many tenants do I have?',
   'Show utility summary.',
+  'What actions should I take for tenant complaints?',
+  'What are the most common maintenance issues?',
+  'Summarize AI resolution statistics.',
+  'Which feedback requires immediate action?',
 ]
 
 export function OwnerAiAssistantScreen() {

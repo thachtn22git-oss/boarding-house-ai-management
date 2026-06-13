@@ -7,6 +7,7 @@ import {
   getSentimentLabel,
   getStatusLabel,
 } from '../feedback.labels'
+import { getFeedbackRecommendation } from '../feedback.recommendations'
 
 type FeedbackViewModalProps = {
   feedback: Feedback
@@ -15,6 +16,7 @@ type FeedbackViewModalProps = {
   onClose: () => void
   onReanalyze?: () => void
   reanalyzing?: boolean
+  onUseSuggestedReply?: (reply: string) => void
 }
 
 function formatConfidence(value: number | undefined) {
@@ -83,6 +85,7 @@ function FeedbackViewModal({
   onClose,
   onReanalyze,
   reanalyzing = false,
+  onUseSuggestedReply,
 }: FeedbackViewModalProps) {
   const categoryLabel = feedback.aiSuggestedCategory
     ? getCategoryLabel(feedback.aiSuggestedCategory)
@@ -94,6 +97,15 @@ function FeedbackViewModal({
     : 'Pending AI'
   const priorityValue = feedback.priority ?? feedback.aiSuggestedPriority
   const priorityLabel = priorityValue ? getPriorityLabel(priorityValue) : 'Pending AI'
+  const recommendation = getFeedbackRecommendation(feedback)
+
+  async function copySuggestedReply() {
+    try {
+      await navigator.clipboard.writeText(recommendation.suggestedReply)
+    } catch (error) {
+      console.warn('Unable to copy suggested reply.', error)
+    }
+  }
 
   return (
     <div className="room-modal-backdrop" role="presentation">
@@ -206,6 +218,33 @@ function FeedbackViewModal({
             <div className="contract-summary-full">
               <dt>AI Summary</dt>
               <dd>{feedback.aiSummary || 'AI summary is not available.'}</dd>
+            </div>
+            <div className="contract-summary-full">
+              <dt>AI Suggested Resolution</dt>
+              <dd className="feedback-recommendation-card">
+                <strong>Suggested Resolution</strong>
+                <p>{recommendation.suggestedResolution}</p>
+                <strong>Suggested Reply</strong>
+                <p>{recommendation.suggestedReply}</p>
+                <div className="feedback-recommendation-actions">
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => void copySuggestedReply()}
+                  >
+                    Copy Reply
+                  </button>
+                  {onUseSuggestedReply ? (
+                    <button
+                      className="primary-button"
+                      type="button"
+                      onClick={() => onUseSuggestedReply(recommendation.suggestedReply)}
+                    >
+                      Use As Response
+                    </button>
+                  ) : null}
+                </div>
+              </dd>
             </div>
             <div className="contract-summary-full">
               <dt>Confidence</dt>

@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore'
 
 import { db } from '../../../config/firebase'
+import { getRecommendationFromData } from '../../feedbacks/feedback.recommendation-rules'
 import { formatCurrency } from '../../../utils/format'
 
 export type AssistantIntent =
@@ -22,6 +23,9 @@ export type AssistantIntent =
   | 'expiring_contracts'
   | 'urgent_feedback'
   | 'feedback_summary'
+  | 'feedback_actions'
+  | 'maintenance_issues'
+  | 'resolution_statistics'
   | 'utility_summary'
   | 'tenant_count'
   | 'unknown'
@@ -142,6 +146,7 @@ export function detectAssistantIntent(question: string): AssistantIntent {
   if (
     text.includes('urgent feedback') ||
     text.includes('needs attention') ||
+    text.includes('immediate action') ||
     text.includes('serious complaint') ||
     text.includes('serious complaints')
   ) {
@@ -155,6 +160,31 @@ export function detectAssistantIntent(question: string): AssistantIntent {
     text.includes('feedback summary')
   ) {
     return 'feedback_summary'
+  }
+
+  if (
+    text.includes('what actions should i take') ||
+    text.includes('recommended resolutions') ||
+    text.includes('recommended actions') ||
+    text.includes('actions for tenant complaints')
+  ) {
+    return 'feedback_actions'
+  }
+
+  if (
+    text.includes('common maintenance issues') ||
+    text.includes('most common maintenance issues') ||
+    text.includes('maintenance complaints')
+  ) {
+    return 'maintenance_issues'
+  }
+
+  if (
+    text.includes('resolution statistics') ||
+    text.includes('resolution stats') ||
+    text.includes('summarize ai resolution')
+  ) {
+    return 'resolution_statistics'
   }
 
   if (
@@ -285,6 +315,9 @@ export function getAssistantConversationTitle(intent: AssistantIntent, question:
   if (intent === 'monthly_revenue' || text.includes('revenue')) return 'Revenue Analysis'
   if (intent === 'overdue_invoices' || text.includes('overdue')) return 'Overdue Invoices'
   if (intent === 'feedback_summary' || text.includes('complaint')) return 'Tenant Complaints'
+  if (intent === 'feedback_actions') return 'Feedback Actions'
+  if (intent === 'maintenance_issues') return 'Maintenance Issues'
+  if (intent === 'resolution_statistics') return 'Resolution Statistics'
   if (intent === 'room_availability') return 'Room Availability'
   if (intent === 'expiring_contracts') return 'Expiring Contracts'
   if (intent === 'urgent_feedback') return 'Feedback Review'
@@ -486,6 +519,81 @@ async function answerFeedbackSummary(ownerId: string) {
   ].join('\n')
 }
 
+async function answerFeedbackActions(ownerId: string) {
+  const feedbacks = await getOwnerRows('feedbacks', ownerId)
+  const unresolved = feedbacks.filter((feedback) => {
+    const status = String(feedback.data.status ?? 'new')
+    return status === 'new' || status === 'in_review'
+  })
+  const actionCounts = new Map<string, number>()
+
+  unresolved.forEach((feedback) => {
+    const action = getRecommendationFromData(feedback.data).actionLabel
+    actionCounts.set(action, (actionCounts.get(action) ?? 0) + 1)
+  })
+
+  const topActions = [...actionCounts.entries()]
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 5)
+
+  if (topActions.length === 0) {
+    return 'There are no unresolved feedback actions right now.'
+  }
+
+  return [
+    'Recommended actions for current tenant complaints:',
+    ...topActions.map(([action, count], index) => `${index + 1}. ${action}: ${count} feedback item(s)`),
+  ].join('\n')
+}
+
+async function answerMaintenanceIssues(ownerId: string) {
+  const feedbacks = await getOwnerRows('feedbacks', ownerId)
+  const maintenanceFeedback = feedbacks.filter((feedback) => {
+    const recommendation = getRecommendationFromData(feedback.data)
+    const category = getEffectiveCategory(feedback.data)
+
+    return recommendation.actionLabel === 'Maintenance Inspection' || category === 'maintenance'
+  })
+
+  if (maintenanceFeedback.length === 0) {
+    return 'No maintenance-related feedback has been detected yet.'
+  }
+
+  return [
+    `${maintenanceFeedback.length} maintenance-related feedback item(s) were found.`,
+    'Most recent maintenance issues:',
+    formatList(
+      maintenanceFeedback.slice(0, 8).map((feedback) => {
+        const recommendation = getRecommendationFromData(feedback.data)
+        return `${String(feedback.data.title ?? feedback.id)}: ${recommendation.suggestedResolution}`
+      }),
+    ),
+  ].join('\n')
+}
+
+async function answerResolutionStatistics(ownerId: string) {
+  const feedbacks = await getOwnerRows('feedbacks', ownerId)
+  const actionCounts = new Map<string, number>()
+
+  feedbacks.forEach((feedback) => {
+    const action = getRecommendationFromData(feedback.data).actionLabel
+    actionCounts.set(action, (actionCounts.get(action) ?? 0) + 1)
+  })
+
+  const rows = [...actionCounts.entries()]
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 6)
+
+  if (rows.length === 0) {
+    return 'No AI resolution statistics are available yet.'
+  }
+
+  return [
+    'AI resolution statistics:',
+    ...rows.map(([action, count]) => `- ${action}: ${count}`),
+  ].join('\n')
+}
+
 async function answerUtilitySummary(ownerId: string) {
   const readings = await getOwnerRows('utilityReadings', ownerId)
   const currentMonthReadings = readings.filter((reading) =>
@@ -522,6 +630,9 @@ async function generateOwnerAnswer(ownerId: string, intent: AssistantIntent) {
   if (intent === 'expiring_contracts') answer = await answerExpiringContracts(ownerId)
   if (intent === 'urgent_feedback') answer = await answerUrgentFeedback(ownerId)
   if (intent === 'feedback_summary') answer = await answerFeedbackSummary(ownerId)
+  if (intent === 'feedback_actions') answer = await answerFeedbackActions(ownerId)
+  if (intent === 'maintenance_issues') answer = await answerMaintenanceIssues(ownerId)
+  if (intent === 'resolution_statistics') answer = await answerResolutionStatistics(ownerId)
   if (intent === 'utility_summary') answer = await answerUtilitySummary(ownerId)
   if (intent === 'tenant_count') answer = await answerTenantCount(ownerId)
 

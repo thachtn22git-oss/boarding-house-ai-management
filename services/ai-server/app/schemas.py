@@ -17,6 +17,8 @@ class FeedbackAnalyzeResponse(BaseModel):
     category: str
     priority: str
     summary: str
+    suggested_resolution: str
+    suggested_reply: str
     confidence: FeedbackConfidence
 
 

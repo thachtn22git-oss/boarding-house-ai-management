@@ -62,6 +62,14 @@ function renderResult(data) {
       <span>Summary</span>
       <strong>${data.summary}</strong>
     </div>
+    <div class="result-card summary-card">
+      <span>Suggested Resolution</span>
+      <strong>${data.suggested_resolution || "Not available"}</strong>
+    </div>
+    <div class="result-card summary-card">
+      <span>Suggested Reply</span>
+      <strong>${data.suggested_reply || "Not available"}</strong>
+    </div>
   `;
 
   confidenceList.innerHTML = confidenceValues

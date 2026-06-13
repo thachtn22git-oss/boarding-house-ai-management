@@ -6,6 +6,7 @@ import {
 } from 'firebase/firestore'
 
 import { db } from '../../../config/firebase'
+import { getRecommendationFromData } from '../../feedbacks/feedback.recommendation-rules'
 import {
   getSupabaseErrorMessage,
   isSupabaseConfigured,
@@ -377,6 +378,11 @@ export function getFeedbackAnalytics(
     },
     () => 1,
   )
+  const recommendedActionGroups = groupSumBy(
+    feedbacks,
+    (feedback) => getRecommendationFromData(feedback.data).actionLabel,
+    () => 1,
+  )
   const categoryLabels = [
     'electricity',
     'water',
@@ -417,6 +423,9 @@ export function getFeedbackAnalytics(
     statusByPriority: [...statusByPriorityGroups.entries()].map(
       ([label, value]) => ({ label, value }),
     ),
+    recommendedActions: [...recommendedActionGroups.entries()]
+      .map(([label, value]) => ({ label, value }))
+      .sort((left, right) => right.value - left.value),
   }
 }
 

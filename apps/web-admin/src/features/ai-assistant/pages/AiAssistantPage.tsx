@@ -31,6 +31,10 @@ const suggestedQuestions = [
   'Which contracts expire soon?',
   'Show urgent feedback.',
   'What are the main tenant complaints?',
+  'What actions should I take for tenant complaints?',
+  'What are the most common maintenance issues?',
+  'Summarize AI resolution statistics.',
+  'Which feedback requires immediate action?',
 ]
 
 function getTimestamp(value: unknown) {

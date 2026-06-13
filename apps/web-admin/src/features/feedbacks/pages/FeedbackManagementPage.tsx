@@ -34,6 +34,7 @@ import {
   getSentimentLabel,
   getStatusLabel,
 } from '../feedback.labels'
+import { getFeedbackRecommendationPreview } from '../feedback.recommendations'
 import '../../rooms/pages/RoomManagementPage.css'
 import '../../tenants/pages/TenantManagementPage.css'
 import '../../contracts/pages/ContractManagementPage.css'
@@ -203,6 +204,15 @@ function FeedbackManagementPage() {
     setModalOpen(true)
   }
 
+  function useSuggestedReply(feedback: Feedback, reply: string) {
+    setViewingFeedback(null)
+    setEditingFeedback({
+      ...feedback,
+      ownerResponse: reply,
+    })
+    setModalOpen(true)
+  }
+
   async function handleSubmit(values: FeedbackFormValues) {
     if (!currentUser) {
       setError('You must be signed in to manage feedback.')
@@ -328,6 +338,8 @@ function FeedbackManagementPage() {
               aiSummary: analysis.summary || null,
               aiSuggestedCategory: analysis.category,
               aiSuggestedPriority: analysis.priority,
+              aiSuggestedResolution: analysis.suggestedResolution || null,
+              aiSuggestedReply: analysis.suggestedReply || null,
               aiConfidence: analysis.confidence,
               aiError: null,
             }
@@ -564,6 +576,9 @@ function FeedbackManagementPage() {
                         <span className="feedback-ai-source-badge">
                           {getAiSourceLabel(feedback)}
                         </span>
+                        <span className="feedback-ai-suggestion">
+                          Suggested: {getFeedbackRecommendationPreview(feedback)}
+                        </span>
                       </td>
                       <td>
                         {feedback.sentiment ? (
@@ -692,6 +707,7 @@ function FeedbackManagementPage() {
           onClose={() => setViewingFeedback(null)}
           onReanalyze={() => void handleReanalyze(viewingFeedback)}
           reanalyzing={reanalyzingFeedbackId === viewingFeedback.id}
+          onUseSuggestedReply={(reply) => useSuggestedReply(viewingFeedback, reply)}
         />
       ) : null}
     </div>

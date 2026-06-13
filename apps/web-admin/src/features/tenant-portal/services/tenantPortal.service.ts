@@ -253,6 +253,10 @@ function mapFeedbackDocument(documentId: string, data: DocumentData): Feedback {
     aiConfidence: mapAIConfidence(data.aiConfidence),
     aiError: typeof data.aiError === 'string' ? data.aiError : null,
     aiSummary: typeof data.aiSummary === 'string' ? data.aiSummary : null,
+    aiSuggestedResolution:
+      typeof data.aiSuggestedResolution === 'string' ? data.aiSuggestedResolution : null,
+    aiSuggestedReply:
+      typeof data.aiSuggestedReply === 'string' ? data.aiSuggestedReply : null,
     ownerResponse:
       typeof data.ownerResponse === 'string' ? data.ownerResponse : undefined,
     createdAt: data.createdAt,
@@ -424,6 +428,8 @@ function getFeedbackAIFields(analysis: FeedbackAIResult | null) {
       aiSummary: null,
       aiSuggestedCategory: null,
       aiSuggestedPriority: null,
+      aiSuggestedResolution: null,
+      aiSuggestedReply: null,
       aiConfidence: null,
       aiError: 'AI analysis unavailable',
     }
@@ -437,6 +443,8 @@ function getFeedbackAIFields(analysis: FeedbackAIResult | null) {
     aiSummary: analysis.summary || null,
     aiSuggestedCategory: analysis.category,
     aiSuggestedPriority: analysis.priority,
+    aiSuggestedResolution: analysis.suggestedResolution || null,
+    aiSuggestedReply: analysis.suggestedReply || null,
     aiConfidence: analysis.confidence,
     aiError: null,
   }

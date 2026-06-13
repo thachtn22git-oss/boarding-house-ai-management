@@ -272,6 +272,14 @@ function DashboardPage() {
           insights={stats.aiInsights}
           emptyMessage="No AI insights yet."
         />
+        <InsightCard
+          title="AI Recommendations"
+          insights={stats.aiRecommendations}
+          emptyMessage="No AI recommendations yet."
+        />
+      </div>
+
+      <div className="dashboard-grid dashboard-grid--two">
         <NotificationWidget />
       </div>
     </div>

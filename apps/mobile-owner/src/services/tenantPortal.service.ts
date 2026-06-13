@@ -95,6 +95,8 @@ function getFeedbackAIFields(analysis: FeedbackAIResult | null) {
       aiSummary: null,
       aiSuggestedCategory: null,
       aiSuggestedPriority: null,
+      aiSuggestedResolution: null,
+      aiSuggestedReply: null,
       aiConfidence: null,
       aiError: 'AI analysis unavailable',
     }
@@ -108,6 +110,8 @@ function getFeedbackAIFields(analysis: FeedbackAIResult | null) {
     aiSummary: analysis.summary || null,
     aiSuggestedCategory: analysis.category,
     aiSuggestedPriority: analysis.priority,
+    aiSuggestedResolution: analysis.suggestedResolution || null,
+    aiSuggestedReply: analysis.suggestedReply || null,
     aiConfidence: analysis.confidence,
     aiError: null,
   }

@@ -548,6 +548,18 @@ function AnalyticsPage() {
             </BarChart>
           </ResponsiveContainer>
         </AnalyticsChartCard>
+
+        <AnalyticsChartCard title="Most Recommended Actions">
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={data.feedback.recommendedActions}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="label" />
+              <YAxis allowDecimals={false} />
+              <Tooltip />
+              <Bar dataKey="value" fill="#16a34a" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </AnalyticsChartCard>
       </div>
 
       <div className="analytics-grid">

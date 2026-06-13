@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import * as Clipboard from 'expo-clipboard'
 import { Alert, Modal, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../providers/AuthProvider'
 import { Screen } from '../../components/common/Screen'
@@ -56,6 +57,61 @@ import type {
   UtilityType,
 } from '../../types/models'
 import { formatCurrency } from '../../utils/format'
+
+function getFeedbackRecommendation(feedback: Feedback) {
+  const text = `${feedback.title} ${feedback.content ?? ''} ${feedback.aiSuggestedCategory ?? feedback.category ?? ''}`.toLowerCase()
+
+  if (feedback.aiSuggestedResolution || feedback.aiSuggestedReply) {
+    return {
+      suggestedResolution:
+        feedback.aiSuggestedResolution ??
+        'Review the feedback and determine appropriate action based on the reported issue.',
+      suggestedReply:
+        feedback.aiSuggestedReply ??
+        'Thank you for your feedback. We will review the issue and follow up accordingly.',
+    }
+  }
+
+  if (['leak', 'water', 'pipe', 'bathroom', 'toilet', 'door', 'window', 'broken', 'repair'].some((keyword) => text.includes(keyword))) {
+    return {
+      suggestedResolution:
+        'Inspect the reported issue and schedule maintenance as soon as possible. Verify the affected equipment and replace damaged parts if necessary.',
+      suggestedReply:
+        'Thank you for reporting this issue. We will arrange maintenance staff to inspect and resolve it as soon as possible.',
+    }
+  }
+  if (['wifi', 'internet', 'network', 'signal', 'slow internet'].some((keyword) => text.includes(keyword))) {
+    return {
+      suggestedResolution:
+        'Check router status, internet connection quality, and signal strength in the affected room. Restart networking equipment if necessary.',
+      suggestedReply:
+        'Thank you for your feedback. We will inspect the network equipment and internet connection quality shortly.',
+    }
+  }
+  if (['electricity', 'power', 'light', 'socket', 'switch'].some((keyword) => text.includes(keyword))) {
+    return {
+      suggestedResolution:
+        'Inspect electrical equipment and verify power supply stability. Schedule an electrician if required.',
+      suggestedReply:
+        'Thank you for reporting this issue. We will inspect the electrical system and address the problem promptly.',
+    }
+  }
+  if (['security', 'theft', 'suspicious', 'unsafe'].some((keyword) => text.includes(keyword))) {
+    return {
+      suggestedResolution:
+        'Review security records, inspect relevant areas, and take immediate preventive measures.',
+      suggestedReply:
+        'Thank you for reporting this concern. We take security seriously and will investigate immediately.',
+    }
+  }
+
+  return {
+    suggestedResolution:
+      'Review the feedback and determine appropriate action based on the reported issue.',
+    suggestedReply:
+      'Thank you for your feedback. We will review the issue and follow up accordingly.',
+  }
+}
 
 type Loader<T> = (ownerId: string) => Promise<T[]>
 
@@ -486,6 +542,9 @@ export function FeedbackScreen() {
           <Text style={styles.meta}>Category: {formatAiCategory(feedback)}</Text>
           <Text style={styles.meta}>AI Priority: {formatAiPriority(feedback)}</Text>
           <Text style={styles.meta}>AI Sentiment: {formatAiLabel(feedback.sentiment)}</Text>
+          <Text style={styles.meta} numberOfLines={1}>
+            Suggested: {getFeedbackRecommendation(feedback).suggestedResolution}
+          </Text>
           <StatusBadge label={formatLabel(feedback.status)} tone={statusTone(feedback.status)} />
           <View style={styles.actions}>
             <PrimaryButton
@@ -499,12 +558,24 @@ export function FeedbackScreen() {
                   `Category: ${formatAiCategory(feedback)}`,
                   `Priority: ${formatAiPriority(feedback)}`,
                   `Summary: ${feedback.aiSummary ?? 'AI summary will be generated after analysis.'}`,
+                  '\nAI Suggested Resolution',
+                  getFeedbackRecommendation(feedback).suggestedResolution,
+                  '\nAI Suggested Reply',
+                  getFeedbackRecommendation(feedback).suggestedReply,
                   `Category Confidence: ${formatConfidence(feedback.aiConfidence?.category)}`,
                   `Sentiment Confidence: ${formatConfidence(feedback.aiConfidence?.sentiment)}`,
                   `Priority Confidence: ${formatConfidence(feedback.aiConfidence?.priority)}`,
                   `AI Error: ${feedback.aiError ?? 'Not available'}`,
                 ].join(''))
               }
+              variant="secondary"
+            />
+            <PrimaryButton
+              label="Copy Reply"
+              onPress={() => {
+                void Clipboard.setStringAsync(getFeedbackRecommendation(feedback).suggestedReply)
+                Alert.alert('Copied', 'Suggested reply copied to clipboard.')
+              }}
               variant="secondary"
             />
             {feedback.status === 'new' ? (

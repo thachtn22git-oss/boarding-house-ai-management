@@ -103,6 +103,18 @@ function mapFeedbackDocument(
     aiConfidence: mapAIConfidence(data.aiConfidence),
     aiError: typeof data.aiError === 'string' ? data.aiError : null,
     aiSummary: typeof data.aiSummary === 'string' ? data.aiSummary : null,
+    aiSuggestedResolution:
+      typeof data.aiSuggestedResolution === 'string'
+        ? data.aiSuggestedResolution
+        : typeof data.suggested_resolution === 'string'
+          ? data.suggested_resolution
+          : null,
+    aiSuggestedReply:
+      typeof data.aiSuggestedReply === 'string'
+        ? data.aiSuggestedReply
+        : typeof data.suggested_reply === 'string'
+          ? data.suggested_reply
+          : null,
     ownerResponse:
       typeof data.ownerResponse === 'string' ? data.ownerResponse : undefined,
     createdAt: data.createdAt,
@@ -247,6 +259,8 @@ export async function updateFeedbackAIAnalysis(
     aiSummary: analysis.summary || null,
     aiSuggestedCategory: analysis.category,
     aiSuggestedPriority: analysis.priority,
+    aiSuggestedResolution: analysis.suggestedResolution || null,
+    aiSuggestedReply: analysis.suggestedReply || null,
     aiConfidence: analysis.confidence,
     aiError: null,
     updatedAt: serverTimestamp(),

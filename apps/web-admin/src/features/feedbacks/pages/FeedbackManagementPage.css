@@ -164,6 +164,10 @@
   color: #1e40af;
   font-size: 12px;
   font-weight: 700;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .feedback-ai-section-title dd {
@@ -250,6 +254,34 @@
 .feedback-ai-error {
   color: #991b1b;
   font-weight: 800;
+}
+
+.feedback-recommendation-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid #dbeafe;
+  border-radius: var(--radius-md);
+  background: #eff6ff;
+}
+
+.feedback-recommendation-card strong {
+  color: #1e3a8a;
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.feedback-recommendation-card p {
+  margin: 0;
+  color: #1f2937;
+}
+
+.feedback-recommendation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
 }
 
 @media (max-width: 900px) {
