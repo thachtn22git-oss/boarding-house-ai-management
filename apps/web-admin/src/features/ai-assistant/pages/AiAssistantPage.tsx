@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import { useAuth } from '../../auth/useAuth'
 import {
@@ -94,6 +95,12 @@ function createLocalMessage(
   }
 }
 
+type ConversationMenuState = {
+  conversationId: string
+  top: number
+  left: number
+}
+
 function AiAssistantPage() {
   const { currentUser } = useAuth()
   const [conversations, setConversations] = useState<AssistantConversation[]>([])
@@ -106,10 +113,11 @@ function AiAssistantPage() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [historyWarning, setHistoryWarning] = useState('')
-  const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
+  const [activeMenu, setActiveMenu] = useState<ConversationMenuState | null>(null)
   const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const messageListRef = useRef<HTMLDivElement | null>(null)
+  const actionMenuRef = useRef<HTMLDivElement | null>(null)
 
   const selectedConversationId = selectedConversation?.id
 
@@ -204,6 +212,43 @@ function AiAssistantPage() {
     scrollToBottom()
   }, [messages, scrollToBottom])
 
+  useEffect(() => {
+    if (!activeMenu) return undefined
+
+    function handlePointerDown(event: PointerEvent) {
+      if (actionMenuRef.current?.contains(event.target as Node)) return
+      setActiveMenu(null)
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setActiveMenu(null)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [activeMenu])
+
+  function openConversationMenu(conversationId: string, button: HTMLButtonElement) {
+    const rect = button.getBoundingClientRect()
+    const menuWidth = 132
+    const menuHeight = 92
+    const gap = 8
+    const hasSpaceBelow = window.innerHeight - rect.bottom >= menuHeight + gap
+    const top = hasSpaceBelow ? rect.bottom + gap : Math.max(gap, rect.top - menuHeight - gap)
+    const left = Math.min(window.innerWidth - menuWidth - gap, Math.max(gap, rect.right - menuWidth))
+
+    setActiveMenu((current) =>
+      current?.conversationId === conversationId ? null : { conversationId, top, left },
+    )
+  }
+
   async function handleNewChat() {
     if (!currentUser || sending) return
 
@@ -288,7 +333,7 @@ function AiAssistantPage() {
     const confirmed = window.confirm('Delete this conversation? This action cannot be undone.')
     if (!confirmed) return
 
-    setActiveMenuId(null)
+    setActiveMenu(null)
     setConversations((current) => current.filter((item) => item.id !== conversation.id))
 
     if (selectedConversation?.id === conversation.id) {
@@ -393,7 +438,12 @@ function AiAssistantPage() {
     }
   }
 
+  const activeMenuConversation = activeMenu
+    ? conversations.find((conversation) => conversation.id === activeMenu.conversationId) ?? null
+    : null
+
   return (
+    <>
     <div className="ai-assistant-page">
       <aside className="dashboard-card ai-assistant-sidebar">
         <div className="ai-assistant-sidebar-header">
@@ -461,35 +511,13 @@ function AiAssistantPage() {
                     aria-label="Conversation menu"
                     className="ai-conversation-menu-button"
                     type="button"
-                    onClick={() =>
-                      setActiveMenuId((current) =>
-                        current === conversation.id ? null : conversation.id,
-                      )
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) =>
+                      openConversationMenu(conversation.id, event.currentTarget)
                     }
                   >
                     ⋮
                   </button>
-                  {activeMenuId === conversation.id ? (
-                    <div className="ai-conversation-menu">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveMenuId(null)
-                          setRenamingConversationId(conversation.id)
-                          setRenameValue(conversation.title)
-                        }}
-                      >
-                        Rename
-                      </button>
-                      <button
-                        className="ai-conversation-delete"
-                        type="button"
-                        onClick={() => void handleDeleteConversation(conversation)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  ) : null}
                 </div>
               </div>
             ))
@@ -581,6 +609,35 @@ function AiAssistantPage() {
         </form>
       </section>
     </div>
+    {activeMenu && activeMenuConversation
+      ? createPortal(
+          <div
+            ref={actionMenuRef}
+            className="ai-conversation-menu ai-conversation-menu--portal"
+            style={{ left: activeMenu.left, top: activeMenu.top }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setActiveMenu(null)
+                setRenamingConversationId(activeMenuConversation.id)
+                setRenameValue(activeMenuConversation.title)
+              }}
+            >
+              Rename
+            </button>
+            <button
+              className="ai-conversation-delete"
+              type="button"
+              onClick={() => void handleDeleteConversation(activeMenuConversation)}
+            >
+              Delete
+            </button>
+          </div>,
+          document.body,
+        )
+      : null}
+    </>
   )
 }
 
