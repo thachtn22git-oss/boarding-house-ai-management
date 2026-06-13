@@ -2,6 +2,8 @@ export type RoomStatus = 'available' | 'occupied' | 'maintenance'
 export type TenantStatus = 'active' | 'inactive' | 'pending'
 export type ContractStatus = 'active' | 'expired' | 'terminated' | 'pending'
 export type InvoiceStatus = 'draft' | 'unpaid' | 'paid' | 'overdue' | 'cancelled'
+export type PaymentStatus = 'unpaid' | 'pending' | 'paid' | 'failed'
+export type PaymentMethod = 'manual' | 'demo_qr'
 export type UtilityType = 'electricity' | 'water'
 export type UtilityReadingStatus = 'draft' | 'confirmed' | 'billed'
 export type FeedbackStatus = 'new' | 'in_review' | 'resolved' | 'rejected'
@@ -79,6 +81,11 @@ export interface Invoice {
   totalAmount: number
   paidAmount: number
   status: InvoiceStatus
+  paymentStatus?: PaymentStatus
+  paymentMethod?: PaymentMethod
+  paymentReference?: string
+  paidAt?: unknown
+  qrPayload?: string | null
   note?: string
 }
 

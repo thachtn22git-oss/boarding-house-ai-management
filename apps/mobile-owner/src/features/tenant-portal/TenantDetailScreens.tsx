@@ -6,7 +6,14 @@ import { ListCard } from '../../components/cards/ListCard'
 import { StatCard } from '../../components/cards/StatCard'
 import { colors, spacing } from '../../constants/theme'
 import { useAuth } from '../../providers/AuthProvider'
-import { createTenantFeedback, getCurrentTenant, type TenantFeedbackValues, type TenantPortalData } from '../../services/tenantPortal.service'
+import {
+  buildDemoQrPayload,
+  createTenantFeedback,
+  getCurrentTenant,
+  simulateTenantInvoiceDemoPayment,
+  type TenantFeedbackValues,
+  type TenantPortalData,
+} from '../../services/tenantPortal.service'
 import { formatCurrency, formatDate } from '../../utils/format'
 import type { Feedback, Invoice, UtilityReading } from '../../types/models'
 
@@ -89,6 +96,7 @@ export function MyInvoicesScreen() {
   const { data, loading, error, reload } = useTenantPortalData()
   const invoices = data?.invoices ?? []
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
+  const tenantName = data?.tenant?.fullName ?? 'Tenant'
 
   return (
     <Screen loading={loading} onRefresh={reload} refreshing={loading} subtitle="Your monthly invoices and payment status." title="My Invoices">
@@ -102,13 +110,28 @@ export function MyInvoicesScreen() {
           <Text style={styles.meta}>Paid Amount: {formatCurrency(invoice.paidAmount)}</Text>
           <Text style={styles.meta}>Remaining Amount: {formatCurrency((invoice.totalAmount ?? 0) - (invoice.paidAmount ?? 0))}</Text>
           <Text style={styles.meta}>Status: {invoice.status}</Text>
+          <Text style={styles.meta}>Payment Status: {invoice.paymentStatus ?? (invoice.status === 'paid' ? 'paid' : 'unpaid')}</Text>
+          {invoice.status === 'paid' && invoice.paidAt ? (
+            <Text style={styles.meta}>Paid At: {formatDate(invoice.paidAt)}</Text>
+          ) : null}
           <View style={styles.actions}>
             <PrimaryButton label="View Details" onPress={() => setSelectedInvoice(invoice)} variant="secondary" />
-            <PrimaryButton label="Confirm Payment" onPress={() => Alert.alert('Payment', 'Online payment will be implemented in a later phase.')} />
+            {invoice.status !== 'paid' && invoice.status !== 'cancelled' ? (
+              <PrimaryButton label="Pay" onPress={() => setSelectedInvoice(invoice)} />
+            ) : null}
           </View>
         </ListCard>
       ))}
-      <InvoiceDetailModal invoice={selectedInvoice} room={data?.room ?? null} tenantName={data?.tenant?.fullName ?? 'Tenant'} onClose={() => setSelectedInvoice(null)} />
+      <InvoiceDetailModal
+        invoice={selectedInvoice}
+        room={data?.room ?? null}
+        tenantName={tenantName}
+        onClose={() => setSelectedInvoice(null)}
+        onPaid={async () => {
+          setSelectedInvoice(null)
+          await reload()
+        }}
+      />
     </Screen>
   )
 }
@@ -202,15 +225,53 @@ export function MyFeedbackScreen() {
   )
 }
 
-function InvoiceDetailModal({ invoice, room, tenantName, onClose }: { invoice: Invoice | null; room: { roomNumber: string; roomType: string } | null; tenantName: string; onClose: () => void }) {
+function InvoiceDetailModal({
+  invoice,
+  room,
+  tenantName,
+  onClose,
+  onPaid,
+}: {
+  invoice: Invoice | null
+  room: { roomNumber: string; roomType: string } | null
+  tenantName: string
+  onClose: () => void
+  onPaid: () => Promise<void>
+}) {
+  const [showPayment, setShowPayment] = useState(false)
+  const [processingPayment, setProcessingPayment] = useState(false)
+
   if (!invoice) return null
+  const currentInvoice = invoice
   const subtotal = invoice.subtotal ?? invoice.items?.reduce((total, item) => total + item.amount, 0) ?? invoice.totalAmount
   const discount = invoice.discount ?? 0
   const remaining = Math.max(0, (invoice.totalAmount ?? 0) - (invoice.paidAmount ?? 0))
+  const canPay = invoice.status !== 'paid' && invoice.status !== 'cancelled'
+  const qrPayload = buildDemoQrPayload(invoice, tenantName)
+
+  async function completeDemoPayment() {
+    setProcessingPayment(true)
+    try {
+      await simulateTenantInvoiceDemoPayment(currentInvoice, tenantName)
+      setShowPayment(false)
+      Alert.alert('Demo Payment', 'Demo payment completed. Invoice marked as paid.')
+      await onPaid()
+    } catch (paymentError) {
+      console.warn('Demo payment failed.', paymentError)
+      Alert.alert('Demo Payment', 'Unable to complete demo payment. Please try again.')
+    } finally {
+      setProcessingPayment(false)
+    }
+  }
+
   return (
     <Modal animationType="slide" visible={!!invoice} onRequestClose={onClose}>
       <ScrollView contentContainerStyle={styles.modalContent}>
         <Text style={styles.modalTitle}>{invoice.invoiceCode}</Text>
+        <View style={styles.demoPaymentNotice}>
+          <Text style={styles.demoPaymentNoticeTitle}>Demo Payment</Text>
+          <Text style={styles.meta}>No real transaction is processed.</Text>
+        </View>
         <Text style={styles.meta}>Tenant: {tenantName}</Text>
         <Text style={styles.meta}>Room: {room ? `${room.roomNumber} - ${room.roomType}` : 'Not available'}</Text>
         <Text style={styles.sectionTitle}>Items</Text>
@@ -229,9 +290,37 @@ function InvoiceDetailModal({ invoice, room, tenantName, onClose }: { invoice: I
         <Text style={styles.meta}>Paid Amount: {formatCurrency(invoice.paidAmount)}</Text>
         <Text style={styles.meta}>Remaining Amount: {formatCurrency(remaining)}</Text>
         <Text style={styles.meta}>Status: {invoice.status}</Text>
+        <Text style={styles.meta}>Payment Status: {invoice.paymentStatus ?? (invoice.status === 'paid' ? 'paid' : 'unpaid')}</Text>
+        <Text style={styles.meta}>Payment Method: {invoice.paymentMethod ?? 'Not available'}</Text>
+        <Text style={styles.meta}>Payment Reference: {invoice.paymentReference ?? 'Not available'}</Text>
+        <Text style={styles.meta}>Paid At: {formatDate(invoice.paidAt)}</Text>
         <Text style={styles.meta}>Note: {invoice.note ?? 'Not available'}</Text>
+        {canPay ? (
+          <PrimaryButton label="Pay with QR" onPress={() => setShowPayment(true)} />
+        ) : null}
         <PrimaryButton label="Close" onPress={onClose} />
       </ScrollView>
+
+      <Modal animationType="fade" transparent visible={showPayment} onRequestClose={() => setShowPayment(false)}>
+        <View style={styles.paymentBackdrop}>
+          <View style={styles.paymentCard}>
+            <Text style={styles.modalTitle}>Pay with QR</Text>
+            <Text style={styles.demoPaymentNoticeTitle}>Demo Payment</Text>
+            <Text style={styles.meta}>Demo payment only. No real money will be transferred.</Text>
+            <View style={styles.qrFallbackBox}>
+              <Text style={styles.qrFallbackTitle}>QR preview unavailable in demo mobile mode.</Text>
+              <Text style={styles.qrPayload}>{qrPayload}</Text>
+            </View>
+            <Text style={styles.meta}>Invoice Code: {invoice.invoiceCode}</Text>
+            <Text style={styles.meta}>Amount: {formatCurrency(invoice.totalAmount)}</Text>
+            <Text style={styles.meta}>Due Date: {invoice.dueDate ?? 'Not available'}</Text>
+            <View style={styles.actions}>
+              <PrimaryButton disabled={processingPayment} label="Close" onPress={() => setShowPayment(false)} variant="secondary" />
+              <PrimaryButton disabled={processingPayment} label={processingPayment ? 'Processing...' : 'Simulate Payment Success'} onPress={() => void completeDemoPayment()} />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   )
 }
@@ -318,4 +407,11 @@ const styles = StyleSheet.create({
   modalTitle: { color: colors.text, fontSize: 24, fontWeight: '900' },
   sectionTitle: { color: colors.text, fontSize: 16, fontWeight: '900' },
   detailBox: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 16, borderWidth: 1, gap: spacing.xs, padding: spacing.md },
+  demoPaymentNotice: { backgroundColor: '#fffbeb', borderColor: '#fde68a', borderRadius: 16, borderWidth: 1, gap: spacing.xs, padding: spacing.md },
+  demoPaymentNoticeTitle: { color: '#92400e', fontSize: 14, fontWeight: '900' },
+  paymentBackdrop: { alignItems: 'center', backgroundColor: 'rgba(15, 23, 42, 0.45)', flex: 1, justifyContent: 'center', padding: spacing.lg },
+  paymentCard: { backgroundColor: colors.surface, borderRadius: 20, gap: spacing.md, maxWidth: 420, padding: spacing.lg, width: '100%' },
+  qrFallbackBox: { backgroundColor: colors.background, borderColor: colors.border, borderRadius: 16, borderStyle: 'dashed', borderWidth: 1, gap: spacing.sm, padding: spacing.md },
+  qrFallbackTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },
+  qrPayload: { color: colors.muted, fontSize: 12, lineHeight: 18 },
 })

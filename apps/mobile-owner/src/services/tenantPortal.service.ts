@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, getDoc, getDocs, limit, query, serverTimestamp, where } from 'firebase/firestore'
+import { addDoc, collection, doc, getDoc, getDocs, limit, query, serverTimestamp, updateDoc, where } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import type {
   Contract,
@@ -38,6 +38,10 @@ export interface TenantFeedbackResult {
 
 function mapDoc<T>(item: { id: string; data: () => Record<string, unknown> }) {
   return { id: item.id, ...item.data() } as T
+}
+
+export function buildDemoQrPayload(invoice: Invoice, tenantName: string) {
+  return `BOARDING_HOUSE_AI|INVOICE:${invoice.invoiceCode}|AMOUNT:${invoice.totalAmount}|TENANT:${tenantName}`
 }
 
 export async function getCurrentTenant(currentUser: AppUser): Promise<TenantPortalData> {
@@ -160,6 +164,42 @@ export async function createTenantFeedback(
 
   return {
     aiUnavailable: !analysis,
+  }
+}
+
+export async function simulateTenantInvoiceDemoPayment(
+  invoice: Invoice,
+  tenantName: string,
+) {
+  const paymentReference = `DEMO-${Date.now()}`
+  const qrPayload = buildDemoQrPayload(invoice, tenantName)
+
+  await updateDoc(doc(db, 'invoices', invoice.id), {
+    status: 'paid',
+    paymentStatus: 'paid',
+    paymentMethod: 'demo_qr',
+    paymentReference,
+    paidAmount: invoice.totalAmount ?? 0,
+    paidAt: serverTimestamp(),
+    qrPayload,
+    updatedAt: serverTimestamp(),
+  })
+
+  try {
+    await addDoc(collection(db, 'notifications'), {
+      userId: invoice.ownerId,
+      role: 'owner',
+      type: 'invoice',
+      priority: 'medium',
+      title: 'Invoice Paid',
+      message: `${tenantName} paid invoice ${invoice.invoiceCode} via demo QR.`,
+      read: false,
+      actionUrl: '/owner/invoices',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  } catch (notificationError) {
+    console.warn('Owner invoice payment notification failed.', notificationError)
   }
 }
 

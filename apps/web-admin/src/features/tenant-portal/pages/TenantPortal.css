@@ -164,6 +164,7 @@
   background: #fef3c7;
 }
 
+.tenant-status-badge--failed,
 .tenant-status-badge--maintenance,
 .tenant-status-badge--expired,
 .tenant-status-badge--terminated,
@@ -234,8 +235,57 @@
   width: min(100%, 900px);
 }
 
+.tenant-payment-modal {
+  width: min(100%, 760px);
+}
+
+.demo-payment-warning,
+.tenant-payment-success {
+  border: 1px solid #fde68a;
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  color: #92400e;
+  background: #fffbeb;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.tenant-payment-success {
+  border-color: #bbf7d0;
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.tenant-payment-grid {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.tenant-payment-qr {
+  display: grid;
+  min-height: 236px;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: #ffffff;
+}
+
+.tenant-paid-date {
+  display: block;
+  margin-top: 6px;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 @media (max-width: 720px) {
   .tenant-feedback-form {
+    grid-template-columns: 1fr;
+  }
+
+  .tenant-payment-grid {
     grid-template-columns: 1fr;
   }
 

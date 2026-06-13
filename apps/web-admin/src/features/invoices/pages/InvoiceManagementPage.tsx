@@ -15,6 +15,7 @@ import {
   deleteInvoice,
   getInvoicesByOwner,
   markInvoiceAsPaid,
+  simulateDemoQrInvoicePayment,
   updateInvoice,
 } from '../services/invoice.service'
 import type { Invoice, InvoiceFormValues, InvoiceStatus } from '../types'
@@ -59,6 +60,9 @@ function InvoiceManagementPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null)
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null)
+  const [processingWebhookInvoiceId, setProcessingWebhookInvoiceId] = useState<
+    string | null
+  >(null)
 
   const ownerInvoices = useMemo(
     () => invoices.filter((invoice) => invoice.ownerId === currentUser?.uid),
@@ -229,6 +233,24 @@ function InvoiceManagementPage() {
       await loadInvoiceData()
     } catch {
       setError('Unable to delete this invoice. Please try again.')
+    }
+  }
+
+  async function handleSimulateWebhook(invoice: Invoice) {
+    const tenant = tenantById.get(invoice.tenantId)
+
+    setProcessingWebhookInvoiceId(invoice.id)
+    setError(null)
+
+    try {
+      await simulateDemoQrInvoicePayment(invoice.id, tenant?.fullName ?? 'Tenant')
+      await loadInvoiceData()
+      setViewingInvoice(null)
+      window.alert('Demo webhook processed successfully.')
+    } catch {
+      setError('Unable to process demo webhook. Please try again.')
+    } finally {
+      setProcessingWebhookInvoiceId(null)
     }
   }
 
@@ -406,6 +428,8 @@ function InvoiceManagementPage() {
           tenant={selectedTenant}
           room={selectedRoom}
           contract={selectedContract}
+          processingWebhook={processingWebhookInvoiceId === viewingInvoice.id}
+          onSimulatePaymentWebhook={() => void handleSimulateWebhook(viewingInvoice)}
           onClose={() => setViewingInvoice(null)}
         />
       ) : null}

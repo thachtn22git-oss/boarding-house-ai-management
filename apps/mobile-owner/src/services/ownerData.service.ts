@@ -148,7 +148,11 @@ export async function updateInvoice(invoiceId: string, values: Partial<InvoiceFo
 export async function markInvoiceAsPaid(invoice: Invoice) {
   await updateDoc(doc(db, 'invoices', invoice.id), {
     status: 'paid',
+    paymentStatus: 'paid',
+    paymentMethod: 'manual',
+    paymentReference: `MANUAL-${Date.now()}`,
     paidAmount: invoice.totalAmount ?? 0,
+    paidAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
 }

@@ -15,7 +15,14 @@ import {
 import { db } from '../../../config/firebase'
 import { createNotification } from '../../notifications/services/notification.service'
 import { getUserUidByEmail } from '../../notifications/services/user-resolution.service'
-import type { Invoice, InvoiceFormValues, InvoiceItem, InvoiceStatus } from '../types'
+import type {
+  Invoice,
+  InvoiceFormValues,
+  InvoiceItem,
+  InvoiceStatus,
+  PaymentMethod,
+  PaymentStatus,
+} from '../types'
 
 const invoicesCollection = collection(db, 'invoices')
 
@@ -32,6 +39,31 @@ function isInvoiceStatus(value: unknown): value is InvoiceStatus {
     value === 'overdue' ||
     value === 'cancelled'
   )
+}
+
+function isPaymentStatus(value: unknown): value is PaymentStatus {
+  return (
+    value === 'unpaid' ||
+    value === 'pending' ||
+    value === 'paid' ||
+    value === 'failed'
+  )
+}
+
+function isPaymentMethod(value: unknown): value is PaymentMethod {
+  return value === 'manual' || value === 'demo_qr'
+}
+
+function getFallbackPaymentStatus(status: InvoiceStatus): PaymentStatus {
+  if (status === 'paid') {
+    return 'paid'
+  }
+
+  if (status === 'cancelled') {
+    return 'failed'
+  }
+
+  return 'unpaid'
 }
 
 function calculateItems(items: InvoiceItem[]) {
@@ -81,6 +113,8 @@ function mapInvoiceDocument(
     ? data.items.map((item, index) => mapInvoiceItem(item, index))
     : []
 
+  const status = isInvoiceStatus(data.status) ? data.status : 'draft'
+
   return {
     id: documentId,
     ownerId: String(data.ownerId ?? ''),
@@ -96,11 +130,30 @@ function mapInvoiceDocument(
     discount: Number(data.discount ?? 0),
     totalAmount: Number(data.totalAmount ?? 0),
     paidAmount: Number(data.paidAmount ?? 0),
-    status: isInvoiceStatus(data.status) ? data.status : 'draft',
+    status,
+    paymentStatus: isPaymentStatus(data.paymentStatus)
+      ? data.paymentStatus
+      : getFallbackPaymentStatus(status),
+    paymentMethod: isPaymentMethod(data.paymentMethod)
+      ? data.paymentMethod
+      : undefined,
+    paymentReference:
+      typeof data.paymentReference === 'string'
+        ? data.paymentReference
+        : undefined,
+    paidAt:
+      data.paidAt && typeof data.paidAt === 'object'
+        ? (data.paidAt as Invoice['paidAt'])
+        : null,
+    qrPayload: typeof data.qrPayload === 'string' ? data.qrPayload : null,
     note: typeof data.note === 'string' ? data.note : undefined,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   }
+}
+
+export function buildDemoQrPayload(invoice: Invoice, tenantName: string) {
+  return `BOARDING_HOUSE_AI|INVOICE:${invoice.invoiceCode}|AMOUNT:${invoice.totalAmount}|TENANT:${tenantName}`
 }
 
 async function getTenantNotificationProfile(
@@ -232,7 +285,52 @@ export async function markInvoiceAsPaid(invoiceId: string): Promise<void> {
 
   await updateDoc(invoiceRef, {
     status: 'paid',
+    paymentStatus: 'paid',
+    paymentMethod: 'manual',
+    paymentReference: `MANUAL-${Date.now()}`,
     paidAmount: invoice.totalAmount,
+    paidAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
+}
+
+export async function simulateDemoQrInvoicePayment(
+  invoiceId: string,
+  tenantName: string,
+): Promise<void> {
+  const invoiceRef = doc(db, 'invoices', invoiceId)
+  const invoiceSnapshot = await getDoc(invoiceRef)
+
+  if (!invoiceSnapshot.exists()) {
+    throw new Error('Invoice not found.')
+  }
+
+  const invoice = mapInvoiceDocument(invoiceSnapshot.id, invoiceSnapshot.data())
+  const paymentReference = `DEMO-${Date.now()}`
+  const qrPayload = buildDemoQrPayload(invoice, tenantName)
+
+  await updateDoc(invoiceRef, {
+    status: 'paid',
+    paymentStatus: 'paid',
+    paymentMethod: 'demo_qr',
+    paymentReference,
+    paidAmount: invoice.totalAmount,
+    paidAt: serverTimestamp(),
+    qrPayload,
+    updatedAt: serverTimestamp(),
+  })
+
+  try {
+    await createNotification({
+      userId: invoice.ownerId,
+      role: 'owner',
+      type: 'invoice',
+      priority: 'medium',
+      title: 'Invoice Paid',
+      message: `${tenantName} paid invoice ${invoice.invoiceCode} via demo QR.`,
+      actionUrl: '/owner/invoices',
+    })
+  } catch (notificationError) {
+    console.warn('Owner invoice payment notification failed.', notificationError)
+  }
 }

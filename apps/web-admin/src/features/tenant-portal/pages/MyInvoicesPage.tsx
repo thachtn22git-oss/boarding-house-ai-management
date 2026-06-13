@@ -1,7 +1,12 @@
 import { useMemo, useState } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 
 import { DashboardSection, StatCard } from '../../../components/dashboard'
-import { formatCurrency } from '../../../utils/format'
+import { formatCurrency, formatDate } from '../../../utils/format'
+import {
+  buildDemoQrPayload,
+  simulateDemoQrInvoicePayment,
+} from '../../invoices/services/invoice.service'
 import type { Invoice } from '../../invoices/types'
 import TenantPortalStateView from './TenantPortalStateView'
 import { formatLabel } from './tenantPortalFormatting'
@@ -10,12 +15,16 @@ import './TenantPortal.css'
 
 function TenantInvoiceViewModal({
   invoice,
+  onPay,
   onClose,
 }: {
   invoice: Invoice
+  onPay: (invoice: Invoice) => void
   onClose: () => void
 }) {
   const remainingAmount = Math.max(invoice.totalAmount - invoice.paidAmount, 0)
+  const paymentStatus = invoice.paymentStatus ?? (invoice.status === 'paid' ? 'paid' : 'unpaid')
+  const canPay = invoice.status !== 'paid' && invoice.status !== 'cancelled'
 
   return (
     <div className="room-modal-backdrop" role="presentation">
@@ -74,6 +83,22 @@ function TenantInvoiceViewModal({
               <dt>Status</dt>
               <dd>{formatLabel(invoice.status)}</dd>
             </div>
+            <div>
+              <dt>Payment Status</dt>
+              <dd>{formatLabel(paymentStatus)}</dd>
+            </div>
+            <div>
+              <dt>Payment Method</dt>
+              <dd>{invoice.paymentMethod ? formatLabel(invoice.paymentMethod) : '-'}</dd>
+            </div>
+            <div>
+              <dt>Payment Reference</dt>
+              <dd>{invoice.paymentReference ?? '-'}</dd>
+            </div>
+            <div>
+              <dt>Paid At</dt>
+              <dd>{invoice.paidAt ? formatDate(invoice.paidAt) : '-'}</dd>
+            </div>
             <div className="tenant-detail-long">
               <dt>Note</dt>
               <dd>{invoice.note || 'No note provided.'}</dd>
@@ -85,6 +110,105 @@ function TenantInvoiceViewModal({
           <button className="secondary-button" type="button" onClick={onClose}>
             Close
           </button>
+          {canPay ? (
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => onPay(invoice)}
+            >
+              Pay with QR
+            </button>
+          ) : null}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function DemoQrPaymentModal({
+  invoice,
+  tenantName,
+  processing,
+  onClose,
+  onSuccess,
+}: {
+  invoice: Invoice
+  tenantName: string
+  processing: boolean
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const qrPayload = buildDemoQrPayload(invoice, tenantName)
+
+  return (
+    <div className="room-modal-backdrop" role="presentation">
+      <section
+        className="room-modal tenant-payment-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tenant-payment-title"
+      >
+        <div className="room-modal-header">
+          <div>
+            <p className="page-eyebrow">Demo Payment</p>
+            <h2 id="tenant-payment-title">Pay with QR</h2>
+          </div>
+          <button
+            className="room-modal-close"
+            type="button"
+            onClick={onClose}
+            aria-label="Close payment modal"
+            disabled={processing}
+          >
+            x
+          </button>
+        </div>
+
+        <div className="demo-payment-warning">
+          Demo payment only. No real money will be transferred.
+        </div>
+
+        <div className="tenant-payment-grid">
+          <div className="tenant-payment-qr">
+            <QRCodeSVG value={qrPayload} size={196} />
+          </div>
+          <dl className="tenant-detail-list">
+            <div>
+              <dt>Invoice Code</dt>
+              <dd>{invoice.invoiceCode}</dd>
+            </div>
+            <div>
+              <dt>Amount</dt>
+              <dd>{formatCurrency(invoice.totalAmount)}</dd>
+            </div>
+            <div>
+              <dt>Due Date</dt>
+              <dd>{invoice.dueDate}</dd>
+            </div>
+            <div className="tenant-detail-long">
+              <dt>QR Payload</dt>
+              <dd>{qrPayload}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div className="room-form-actions">
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={onClose}
+            disabled={processing}
+          >
+            Close
+          </button>
+          <button
+            className="primary-button"
+            type="button"
+            onClick={onSuccess}
+            disabled={processing}
+          >
+            {processing ? 'Processing...' : 'Simulate Payment Success'}
+          </button>
         </div>
       </section>
     </div>
@@ -94,7 +218,11 @@ function TenantInvoiceViewModal({
 function MyInvoicesPage() {
   const { data, isLoading, error, reload } = useTenantPortalData()
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
+  const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null)
+  const [successMessage, setSuccessMessage] = useState('')
+  const [processingPayment, setProcessingPayment] = useState(false)
   const invoices = useMemo(() => data?.invoices ?? [], [data?.invoices])
+  const tenantName = data?.tenant?.fullName ?? 'Tenant'
 
   const stats = useMemo(
     () => ({
@@ -104,6 +232,27 @@ function MyInvoicesPage() {
     }),
     [invoices],
   )
+
+  async function handleDemoPaymentSuccess() {
+    if (!paymentInvoice) {
+      return
+    }
+
+    setProcessingPayment(true)
+    setSuccessMessage('')
+
+    try {
+      await simulateDemoQrInvoicePayment(paymentInvoice.id, tenantName)
+      setPaymentInvoice(null)
+      setSelectedInvoice(null)
+      setSuccessMessage('Demo payment completed. Invoice marked as paid.')
+      await reload()
+    } catch {
+      setSuccessMessage('Unable to complete demo payment. Please try again.')
+    } finally {
+      setProcessingPayment(false)
+    }
+  }
 
   if (isLoading && !data) {
     return (
@@ -146,6 +295,10 @@ function MyInvoicesPage() {
         </div>
       </DashboardSection>
 
+      {successMessage ? (
+        <div className="tenant-payment-success">{successMessage}</div>
+      ) : null}
+
       <section className="dashboard-card room-table-card">
         {invoices.length === 0 ? (
           <div className="room-empty-state">
@@ -163,6 +316,7 @@ function MyInvoicesPage() {
                   <th>Total Amount</th>
                   <th>Paid Amount</th>
                   <th>Status</th>
+                  <th>Payment</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -182,13 +336,36 @@ function MyInvoicesPage() {
                       </span>
                     </td>
                     <td>
-                      <button
-                        className="table-action-button"
-                        type="button"
-                        onClick={() => setSelectedInvoice(invoice)}
+                      <span
+                        className={`tenant-status-badge tenant-status-badge--${invoice.paymentStatus ?? (invoice.status === 'paid' ? 'paid' : 'unpaid')}`}
                       >
-                        View Invoice
-                      </button>
+                        {formatLabel(invoice.paymentStatus ?? (invoice.status === 'paid' ? 'paid' : 'unpaid'))}
+                      </span>
+                      {invoice.status === 'paid' && invoice.paidAt ? (
+                        <span className="tenant-paid-date">
+                          Paid {formatDate(invoice.paidAt)}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td>
+                      <div className="room-table-actions">
+                        <button
+                          className="table-action-button"
+                          type="button"
+                          onClick={() => setSelectedInvoice(invoice)}
+                        >
+                          View Invoice
+                        </button>
+                        {invoice.status !== 'paid' && invoice.status !== 'cancelled' ? (
+                          <button
+                            className="table-action-button"
+                            type="button"
+                            onClick={() => setPaymentInvoice(invoice)}
+                          >
+                            Pay
+                          </button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -201,7 +378,22 @@ function MyInvoicesPage() {
       {selectedInvoice ? (
         <TenantInvoiceViewModal
           invoice={selectedInvoice}
+          onPay={setPaymentInvoice}
           onClose={() => setSelectedInvoice(null)}
+        />
+      ) : null}
+
+      {paymentInvoice ? (
+        <DemoQrPaymentModal
+          invoice={paymentInvoice}
+          tenantName={tenantName}
+          processing={processingPayment}
+          onClose={() => {
+            if (!processingPayment) {
+              setPaymentInvoice(null)
+            }
+          }}
+          onSuccess={() => void handleDemoPaymentSuccess()}
         />
       ) : null}
     </div>

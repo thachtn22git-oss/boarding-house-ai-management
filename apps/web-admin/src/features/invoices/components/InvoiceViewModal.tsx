@@ -8,7 +8,9 @@ type InvoiceViewModalProps = {
   tenant?: Tenant
   room?: Room
   contract?: Contract
+  processingWebhook?: boolean
   onClose: () => void
+  onSimulatePaymentWebhook?: () => void
 }
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
@@ -35,14 +37,43 @@ function formatDate(value: string) {
   }).format(new Date(value))
 }
 
+function formatPaymentDate(value: unknown) {
+  if (!value) return '-'
+
+  const date =
+    typeof value === 'object' && value !== null && 'toDate' in value
+      ? (value as { toDate: () => Date }).toDate()
+      : typeof value === 'string'
+        ? new Date(value)
+        : value instanceof Date
+          ? value
+          : null
+
+  if (!date || Number.isNaN(date.getTime())) {
+    return '-'
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
 function InvoiceViewModal({
   invoice,
   tenant,
   room,
   contract,
+  processingWebhook = false,
   onClose,
+  onSimulatePaymentWebhook,
 }: InvoiceViewModalProps) {
   const remainingAmount = Math.max(invoice.totalAmount - invoice.paidAmount, 0)
+  const canSimulateWebhook =
+    import.meta.env.DEV && invoice.status !== 'paid' && invoice.status !== 'cancelled'
 
   return (
     <div className="room-modal-backdrop" role="presentation">
@@ -106,6 +137,22 @@ function InvoiceViewModal({
             <div>
               <dt>Status</dt>
               <dd>{getStatusLabel(invoice.status)}</dd>
+            </div>
+            <div>
+              <dt>Payment status</dt>
+              <dd>{invoice.paymentStatus ?? (invoice.status === 'paid' ? 'paid' : 'unpaid')}</dd>
+            </div>
+            <div>
+              <dt>Payment method</dt>
+              <dd>{invoice.paymentMethod ?? '-'}</dd>
+            </div>
+            <div>
+              <dt>Payment reference</dt>
+              <dd>{invoice.paymentReference ?? '-'}</dd>
+            </div>
+            <div>
+              <dt>Paid at</dt>
+              <dd>{formatPaymentDate(invoice.paidAt)}</dd>
             </div>
           </dl>
 
@@ -172,6 +219,16 @@ function InvoiceViewModal({
           >
             Print
           </button>
+          {canSimulateWebhook ? (
+            <button
+              className="primary-button"
+              type="button"
+              onClick={onSimulatePaymentWebhook}
+              disabled={processingWebhook}
+            >
+              {processingWebhook ? 'Processing...' : 'Simulate Payment Webhook'}
+            </button>
+          ) : null}
         </div>
       </section>
     </div>
