@@ -117,6 +117,7 @@ function AiAssistantPage() {
   const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const messageListRef = useRef<HTMLDivElement | null>(null)
+  const conversationListRef = useRef<HTMLDivElement | null>(null)
   const actionMenuRef = useRef<HTMLDivElement | null>(null)
 
   const selectedConversationId = selectedConversation?.id
@@ -215,23 +216,34 @@ function AiAssistantPage() {
   useEffect(() => {
     if (!activeMenu) return undefined
 
+    function closeMenu() {
+      setActiveMenu(null)
+    }
+
     function handlePointerDown(event: PointerEvent) {
       if (actionMenuRef.current?.contains(event.target as Node)) return
-      setActiveMenu(null)
+      closeMenu()
     }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        setActiveMenu(null)
+        closeMenu()
       }
     }
 
+    const conversationList = conversationListRef.current
+    const windowScrollOptions: AddEventListenerOptions = { capture: true, passive: true }
+
     document.addEventListener('pointerdown', handlePointerDown)
     document.addEventListener('keydown', handleKeyDown)
+    conversationList?.addEventListener('scroll', closeMenu, { passive: true })
+    window.addEventListener('scroll', closeMenu, windowScrollOptions)
 
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
+      conversationList?.removeEventListener('scroll', closeMenu)
+      window.removeEventListener('scroll', closeMenu, windowScrollOptions)
     }
   }, [activeMenu])
 
@@ -252,6 +264,7 @@ function AiAssistantPage() {
   async function handleNewChat() {
     if (!currentUser || sending) return
 
+    setActiveMenu(null)
     setError('')
 
     const localConversation = createLocalConversation(currentUser.uid)
@@ -330,10 +343,10 @@ function AiAssistantPage() {
   async function handleDeleteConversation(conversation: AssistantConversation) {
     if (!currentUser) return
 
+    setActiveMenu(null)
     const confirmed = window.confirm('Delete this conversation? This action cannot be undone.')
     if (!confirmed) return
 
-    setActiveMenu(null)
     setConversations((current) => current.filter((item) => item.id !== conversation.id))
 
     if (selectedConversation?.id === conversation.id) {
@@ -461,7 +474,7 @@ function AiAssistantPage() {
           </button>
         </div>
 
-        <div className="ai-conversation-list">
+        <div className="ai-conversation-list" ref={conversationListRef}>
           {loadingConversations ? (
             <p className="ai-muted">Loading recent chats...</p>
           ) : conversations.length === 0 ? (
@@ -477,6 +490,7 @@ function AiAssistantPage() {
                 key={conversation.id}
                 onClick={() => {
                   if (renamingConversationId === conversation.id) return
+                  setActiveMenu(null)
                   setSelectedConversation(conversation)
                 }}
               >
