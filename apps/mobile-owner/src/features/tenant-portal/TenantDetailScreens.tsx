@@ -162,7 +162,7 @@ export function MyUtilitiesScreen() {
           <Text style={styles.meta}>Usage: {reading.usage}</Text>
           <Text style={styles.meta}>Unit Price: {formatCurrency(reading.unitPrice)}</Text>
           <Text style={styles.meta}>Total Amount: {formatCurrency(reading.totalAmount)}</Text>
-          <Text style={styles.meta}>Status: {reading.status}</Text>
+          <Text style={styles.meta}>Status: {getUtilityDisplayStatus(reading)}</Text>
           <Text style={styles.meta}>Payment Status: {getUtilityPaymentStatus(reading)}</Text>
           <View style={styles.actions}>
             <PrimaryButton label="View Details" onPress={() => showUtilityDetails(reading)} variant="secondary" />
@@ -378,7 +378,7 @@ function showUtilityDetails(reading: UtilityReading) {
     `Usage: ${reading.usage}`,
     `Unit Price: ${formatCurrency(reading.unitPrice)}`,
     `Total Amount: ${formatCurrency(reading.totalAmount)}`,
-    `Status: ${reading.status}`,
+    `Status: ${getUtilityDisplayStatus(reading)}`,
     `Payment Status: ${getUtilityPaymentStatus(reading)}`,
     `Payment Method: ${reading.paymentMethod ?? 'Not available'}`,
     `Payment Reference: ${reading.paymentReference ?? 'Not available'}`,
@@ -467,6 +467,10 @@ function UtilityPaymentModal({
 
 function getUtilityPaymentStatus(reading: UtilityReading) {
   return reading.paymentStatus ?? (reading.status === 'paid' || reading.status === 'billed_paid' ? 'paid' : 'unpaid')
+}
+
+function getUtilityDisplayStatus(reading: UtilityReading) {
+  return getUtilityPaymentStatus(reading) === 'paid' ? 'paid' : reading.status
 }
 
 function showFeedbackDetails(feedback: Feedback) {

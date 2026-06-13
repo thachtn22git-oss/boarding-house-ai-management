@@ -17,6 +17,10 @@ function getUtilityPaymentStatus(utility: UtilityReading) {
   return utility.paymentStatus ?? (utility.status === 'paid' || utility.status === 'billed_paid' ? 'paid' : 'unpaid')
 }
 
+function getUtilityDisplayStatus(utility: UtilityReading) {
+  return getUtilityPaymentStatus(utility) === 'paid' ? 'paid' : utility.status
+}
+
 function DemoVietQRUtilityPaymentModal({
   utility,
   roomNumber,
@@ -259,9 +263,9 @@ function MyUtilitiesPage() {
                     <td>{formatCurrency(utility.totalAmount)}</td>
                     <td>
                       <span
-                        className={`tenant-status-badge tenant-status-badge--${utility.status}`}
+                        className={`tenant-status-badge tenant-status-badge--${getUtilityDisplayStatus(utility)}`}
                       >
-                        {formatLabel(utility.status)}
+                        {formatLabel(getUtilityDisplayStatus(utility))}
                       </span>
                     </td>
                     <td>

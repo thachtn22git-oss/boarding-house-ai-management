@@ -500,7 +500,10 @@ export function UtilitiesScreen() {
           <View style={styles.item}>
             <View style={styles.rowBetween}>
               <Text style={styles.itemTitle}>{formatLabel(reading.utilityType)}</Text>
-              <StatusBadge label={formatLabel(reading.status)} tone={statusTone(reading.status)} />
+              <StatusBadge
+                label={formatLabel(getUtilityDisplayStatus(reading))}
+                tone={statusTone(getUtilityDisplayStatus(reading))}
+              />
             </View>
             <Text style={styles.meta}>Billing Month: {reading.billingMonth}</Text>
             <Text style={styles.meta}>Usage: {reading.usage}</Text>
@@ -1017,6 +1020,14 @@ function statusTone(value?: string): 'primary' | 'success' | 'warning' | 'danger
   if (value === 'overdue' || value === 'terminated' || value === 'rejected') return 'danger'
   if (value === 'available' || value === 'water') return 'primary'
   return 'muted'
+}
+
+function getUtilityPaymentStatus(reading: UtilityReading) {
+  return reading.paymentStatus ?? (reading.status === 'paid' || reading.status === 'billed_paid' ? 'paid' : 'unpaid')
+}
+
+function getUtilityDisplayStatus(reading: UtilityReading) {
+  return getUtilityPaymentStatus(reading) === 'paid' ? 'paid' : reading.status
 }
 
 function formatLabel(value?: string) {

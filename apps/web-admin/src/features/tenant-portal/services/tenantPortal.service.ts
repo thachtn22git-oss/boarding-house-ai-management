@@ -31,6 +31,9 @@ import type { Room, RoomStatus } from '../../rooms/types'
 import type { Tenant, TenantStatus } from '../../tenants/types'
 import type {
   UtilityReading,
+  UtilityPaymentMethod,
+  UtilityPaymentStatus,
+  UtilityQRProvider,
   UtilityReadingStatus,
   UtilityType,
 } from '../../utilities/types'
@@ -78,7 +81,33 @@ function isUtilityType(value: unknown): value is UtilityType {
 }
 
 function isUtilityReadingStatus(value: unknown): value is UtilityReadingStatus {
-  return value === 'draft' || value === 'confirmed' || value === 'billed'
+  return (
+    value === 'draft' ||
+    value === 'confirmed' ||
+    value === 'billed' ||
+    value === 'paid' ||
+    value === 'billed_paid'
+  )
+}
+
+function isUtilityPaymentStatus(value: unknown): value is UtilityPaymentStatus {
+  return value === 'unpaid' || value === 'pending' || value === 'paid' || value === 'failed'
+}
+
+function isUtilityPaymentMethod(value: unknown): value is UtilityPaymentMethod {
+  return value === 'manual' || value === 'demo_vietqr'
+}
+
+function isUtilityQRProvider(value: unknown): value is UtilityQRProvider {
+  return value === 'vietqr_demo'
+}
+
+function getUtilityFallbackPaymentStatus(status: UtilityReadingStatus): UtilityPaymentStatus {
+  if (status === 'paid' || status === 'billed_paid') {
+    return 'paid'
+  }
+
+  return 'unpaid'
 }
 
 function isFeedbackCategory(value: unknown): value is FeedbackCategory {
@@ -212,6 +241,8 @@ function mapUtilityReadingDocument(
   documentId: string,
   data: DocumentData,
 ): UtilityReading {
+  const status = isUtilityReadingStatus(data.status) ? data.status : 'draft'
+
   return {
     id: documentId,
     ownerId: String(data.ownerId ?? ''),
@@ -224,7 +255,23 @@ function mapUtilityReadingDocument(
     usage: Number(data.usage ?? 0),
     unitPrice: Number(data.unitPrice ?? 0),
     totalAmount: Number(data.totalAmount ?? 0),
-    status: isUtilityReadingStatus(data.status) ? data.status : 'draft',
+    status,
+    paymentStatus: isUtilityPaymentStatus(data.paymentStatus)
+      ? data.paymentStatus
+      : getUtilityFallbackPaymentStatus(status),
+    paymentMethod: isUtilityPaymentMethod(data.paymentMethod)
+      ? data.paymentMethod
+      : undefined,
+    paymentReference:
+      typeof data.paymentReference === 'string' ? data.paymentReference : null,
+    paidAt:
+      data.paidAt && typeof data.paidAt === 'object'
+        ? (data.paidAt as UtilityReading['paidAt'])
+        : null,
+    paidAmount:
+      typeof data.paidAmount === 'number' ? data.paidAmount : undefined,
+    qrProvider: isUtilityQRProvider(data.qrProvider) ? data.qrProvider : undefined,
+    qrPayload: typeof data.qrPayload === 'string' ? data.qrPayload : null,
     note: typeof data.note === 'string' ? data.note : undefined,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,

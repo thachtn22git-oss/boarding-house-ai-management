@@ -52,6 +52,10 @@ function getPaymentStatus(reading: UtilityReading) {
   return reading.paymentStatus ?? (reading.status === 'paid' || reading.status === 'billed_paid' ? 'paid' : 'unpaid')
 }
 
+function getDisplayStatus(reading: UtilityReading) {
+  return getPaymentStatus(reading) === 'paid' ? 'paid' : reading.status
+}
+
 function formatPaymentDate(value: unknown) {
   if (!value) return '-'
 
@@ -146,7 +150,7 @@ function UtilityViewModal({
             </div>
             <div>
               <dt>Status</dt>
-              <dd>{getStatusLabel(reading.status)}</dd>
+              <dd>{getStatusLabel(getDisplayStatus(reading))}</dd>
             </div>
           </dl>
 
@@ -570,9 +574,9 @@ function UtilitiesManagementPage() {
                       <td>{currencyFormatter.format(reading.totalAmount)}</td>
                       <td>
                         <span
-                          className={`status-badge utility-status-badge--${reading.status}`}
+                          className={`status-badge utility-status-badge--${getDisplayStatus(reading)}`}
                         >
-                          {getStatusLabel(reading.status)}
+                          {getStatusLabel(getDisplayStatus(reading))}
                         </span>
                       </td>
                       <td>
