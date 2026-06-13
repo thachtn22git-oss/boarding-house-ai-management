@@ -65,7 +65,7 @@ export function ChatScreen({ initialRoomId }: ChatScreenProps) {
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(initialRoomId ?? null)
   const [messageText, setMessageText] = useState('')
   const [loadingRooms, setLoadingRooms] = useState(true)
-  const [loadingMessages, setLoadingMessages] = useState(false)
+  const [isInitialMessagesLoading, setIsInitialMessagesLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const listRef = useRef<FlatList<ChatMessage> | null>(null)
@@ -99,7 +99,7 @@ export function ChatScreen({ initialRoomId }: ChatScreenProps) {
   )
 
   useEffect(() => {
-    if (!currentUser || !selectedRoom) {
+    if (!currentUser || !selectedRoom?.id) {
       setMessages([])
       return undefined
     }
@@ -109,25 +109,27 @@ export function ChatScreen({ initialRoomId }: ChatScreenProps) {
       return undefined
     }
 
-    setLoadingMessages(true)
+    setIsInitialMessagesLoading(true)
+    setMessages([])
     void markChatRoomAsRead(selectedRoom.id, currentUser.uid).catch((readError) => {
       console.warn('Unable to mark chat as read.', readError)
     })
 
+    const chatRoomId = selectedRoom.id
     return subscribeToChatMessages(
-      selectedRoom.id,
+      chatRoomId,
       (items) => {
         setMessages(items)
-        setLoadingMessages(false)
+        setIsInitialMessagesLoading(false)
         requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }))
       },
       (listenerError) => {
         console.warn('Chat message listener failed.', listenerError)
         setError('Unable to load messages.')
-        setLoadingMessages(false)
+        setIsInitialMessagesLoading(false)
       },
     )
-  }, [currentUser, selectedRoom])
+  }, [currentUser?.uid, selectedRoom?.id])
 
   async function handleSend() {
     if (!currentUser || !selectedRoom || !messageText.trim()) return
@@ -211,7 +213,8 @@ export function ChatScreen({ initialRoomId }: ChatScreenProps) {
       }
     >
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        {loadingMessages ? <Text style={styles.empty}>Loading messages...</Text> : null}
+        {isInitialMessagesLoading ? <Text style={styles.empty}>Loading messages...</Text> : null}
+        {!isInitialMessagesLoading && messages.length === 0 ? <Text style={styles.empty}>No messages yet.</Text> : null}
         <FlatList
           ref={listRef}
           data={messages}

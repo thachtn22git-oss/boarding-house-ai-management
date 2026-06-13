@@ -197,6 +197,7 @@ export function subscribeToChatMessages(
 
   load()
 
+  console.log('Mobile subscribing to messages:', chatRoomId)
   const channel = client
     .channel(createRealtimeChannelName('mobile_chat_messages', chatRoomId))
     .on(
@@ -211,8 +212,7 @@ export function subscribeToChatMessages(
         const row = payload.new as ChatMessageRow
         if (!row || row.chat_room_id !== chatRoomId) return
 
-        console.log('Realtime message inserted:', row.id)
-        console.log('New realtime message:', payload.new)
+        console.log('Mobile realtime message inserted:', row.id)
         const nextMessage = mapMessage(row)
         currentMessages = [...currentMessages, nextMessage]
           .filter((message, index, messages) =>
@@ -252,13 +252,13 @@ export function subscribeToChatMessages(
         console.warn('Supabase chat message realtime subscription failed.', { chatRoomId, status, error })
       }
       if (status === 'SUBSCRIBED') {
-        console.log('Subscribed to chat messages:', chatRoomId)
+        console.log('Mobile subscribed to chat messages:', chatRoomId)
       }
     })
 
   return () => {
     active = false
-    console.log('Unsubscribed from chat messages:', chatRoomId)
+    console.log('Mobile unsubscribing from messages:', chatRoomId)
     void client.removeChannel(channel)
   }
 }

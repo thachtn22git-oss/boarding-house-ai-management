@@ -315,6 +315,56 @@ export async function createAssistantConversation(ownerId: string, title = 'New 
   })
 }
 
+export async function updateAssistantConversationTitle(
+  conversationId: string,
+  ownerId: string,
+  title: string,
+): Promise<AssistantConversation> {
+  const nextTitle = title.trim() || 'New Conversation'
+
+  if (!supabase || !isSupabaseConfigured || conversationId.startsWith('local-')) {
+    const now = new Date().toISOString()
+
+    return {
+      id: conversationId,
+      ownerId,
+      title: nextTitle,
+      updatedAt: now,
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('ai_conversations')
+    .update({ title: nextTitle, updated_at: new Date().toISOString() })
+    .eq('id', conversationId)
+    .eq('owner_id', ownerId)
+    .select('*')
+    .single()
+
+  if (error) throw error
+
+  return mapConversation(data.id, {
+    ownerId: data.owner_id,
+    title: data.title,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  })
+}
+
+export async function deleteAssistantConversation(conversationId: string, ownerId: string) {
+  if (!supabase || !isSupabaseConfigured || conversationId.startsWith('local-')) {
+    return
+  }
+
+  const { error } = await supabase
+    .from('ai_conversations')
+    .delete()
+    .eq('id', conversationId)
+    .eq('owner_id', ownerId)
+
+  if (error) throw error
+}
+
 export async function askOwnerAssistant({
   ownerId,
   question,
