@@ -1,6 +1,16 @@
 type InsightCardProps = {
   title: string
-  insights: Array<string | { id: string; title: string; description: string }>
+  insights: Array<
+    | string
+    | {
+        id: string
+        title: string
+        description: string
+        severity?: 'low' | 'medium' | 'high' | 'info' | 'warning' | 'success' | 'danger'
+        icon?: string
+        createdAt?: string
+      }
+  >
   emptyMessage?: string
 }
 
@@ -20,9 +30,29 @@ function InsightCard({ title, insights, emptyMessage }: InsightCardProps) {
             }
 
             return (
-              <li key={insight.id}>
-                <strong>{insight.title}</strong>
-                <span>{insight.description}</span>
+              <li
+                key={insight.id}
+                className={`insight-item insight-item--${insight.severity ?? 'info'}`}
+              >
+                {insight.icon ? (
+                  <span className="insight-icon" aria-hidden="true">
+                    {insight.icon}
+                  </span>
+                ) : null}
+                <div>
+                  <div className="insight-title-row">
+                    <strong>{insight.title}</strong>
+                    {insight.severity ? (
+                      <span className={`dashboard-badge dashboard-badge--${insight.severity}`}>
+                        {insight.severity}
+                      </span>
+                    ) : null}
+                  </div>
+                  <span>{insight.description}</span>
+                  {insight.createdAt ? (
+                    <small>{new Date(insight.createdAt).toLocaleDateString()}</small>
+                  ) : null}
+                </div>
               </li>
             )
           })}

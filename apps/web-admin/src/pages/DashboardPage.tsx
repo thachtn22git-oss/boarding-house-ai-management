@@ -12,6 +12,13 @@ import {
   type DashboardActivity,
   type OwnerDashboardStats,
 } from '../features/dashboard/services/dashboard.service'
+import type {
+  AIRecommendation,
+  AITrend,
+  KPIAlert,
+  MonthlyAISummary,
+  PriorityCenter,
+} from '../features/dashboard/services/analytics-ai.service'
 import { useAuth } from '../features/auth/useAuth'
 import NotificationWidget from '../features/notifications/components/NotificationWidget'
 import { formatCurrency, formatPercent } from '../utils/format'
@@ -42,6 +49,216 @@ function getMaintenancePercent(stats: OwnerDashboardStats) {
   }
 
   return (stats.maintenanceRooms / stats.totalRooms) * 100
+}
+
+function getTrendPrefix(direction: AITrend['direction']) {
+  if (direction === 'up') {
+    return '+'
+  }
+
+  if (direction === 'down') {
+    return '-'
+  }
+
+  return ''
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="dashboard-page">
+      <div className="dashboard-skeleton-grid">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <div
+            className="dashboard-card dashboard-skeleton-card"
+            key={`dashboard-skeleton-${index}`}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function KPIAlerts({ alerts }: { alerts: KPIAlert[] }) {
+  if (alerts.length === 0) {
+    return null
+  }
+
+  return (
+    <section className="kpi-alert-grid" aria-label="Smart KPI alerts">
+      {alerts.map((alert) => (
+        <article
+          className={`dashboard-card kpi-alert-card kpi-alert-card--${alert.severity}`}
+          key={alert.id}
+        >
+          <span className="kpi-alert-label">{alert.severity} alert</span>
+          <h3>{alert.title}</h3>
+          <p>{alert.description}</p>
+        </article>
+      ))}
+    </section>
+  )
+}
+
+function TrendAnalysisCard({ trends }: { trends: AITrend[] }) {
+  return (
+    <section className="dashboard-card panel-card ai-trend-card">
+      <div className="panel-card-header">
+        <div>
+          <p className="panel-eyebrow">AI Monitoring</p>
+          <h2>Trend Analysis</h2>
+        </div>
+      </div>
+      {trends.length === 0 ? (
+        <p className="dashboard-empty-text">No trend data available.</p>
+      ) : (
+        <div className="trend-list">
+          {trends.map((trend) => (
+            <div
+              className={`trend-item trend-item--${trend.direction}`}
+              key={trend.id}
+            >
+              <span>{trend.metric}</span>
+              <strong>
+                {trend.direction === 'stable'
+                  ? 'Stable'
+                  : `${getTrendPrefix(trend.direction)}${trend.percentage}%`}
+              </strong>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function RecommendationsCard({
+  recommendations,
+}: {
+  recommendations: AIRecommendation[]
+}) {
+  return (
+    <section className="dashboard-card panel-card ai-recommendation-card">
+      <div className="panel-card-header">
+        <div>
+          <p className="panel-eyebrow">Action Engine</p>
+          <h2>AI Recommendations</h2>
+        </div>
+      </div>
+      {recommendations.length === 0 ? (
+        <p className="dashboard-empty-text">No AI recommendations yet.</p>
+      ) : (
+        <div className="recommendation-list">
+          {recommendations.map((recommendation) => (
+            <article
+              className={`recommendation-item recommendation-item--${recommendation.priority}`}
+              key={recommendation.id}
+            >
+              <div className="recommendation-title-row">
+                <h3>{recommendation.title}</h3>
+                <span
+                  className={`dashboard-badge dashboard-badge--${recommendation.priority}`}
+                >
+                  {recommendation.priority}
+                </span>
+              </div>
+              <p>{recommendation.explanation}</p>
+              <div className="suggested-action">
+                <span>Suggested Action</span>
+                <strong>{recommendation.suggestedAction}</strong>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function MonthlySummaryCard({ summary }: { summary: MonthlyAISummary }) {
+  const items = [
+    ['Total Revenue', formatCurrency(summary.totalRevenue)],
+    ['Occupancy Rate', formatPercent(summary.occupancyRate)],
+    ['Total Feedback', String(summary.totalFeedbackCount)],
+    ['Positive Feedback', String(summary.positiveFeedbackCount)],
+    ['Negative Feedback', String(summary.negativeFeedbackCount)],
+    ['Most Common Complaint', summary.mostCommonComplaintCategory],
+    ['Urgent Issues', String(summary.urgentIssuesCount)],
+  ]
+
+  return (
+    <section className="dashboard-card panel-card monthly-summary-card">
+      <div className="panel-card-header">
+        <div>
+          <p className="panel-eyebrow">Monthly AI Summary</p>
+          <h2>Operating Snapshot</h2>
+        </div>
+      </div>
+      <div className="summary-metric-grid">
+        {items.map(([label, value]) => (
+          <div className="summary-metric" key={label}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function PriorityList({
+  title,
+  tone,
+  items,
+}: {
+  title: string
+  tone: 'high' | 'medium' | 'low'
+  items: string[]
+}) {
+  return (
+    <div className={`priority-column priority-column--${tone}`}>
+      <div className="priority-column-header">
+        <h3>{title}</h3>
+        <span className={`dashboard-badge dashboard-badge--${tone}`}>
+          {tone}
+        </span>
+      </div>
+      {items.length === 0 ? (
+        <p className="dashboard-empty-text">No items.</p>
+      ) : (
+        <ul>
+          {items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function PriorityCenterCard({ priorityCenter }: { priorityCenter: PriorityCenter }) {
+  return (
+    <section className="dashboard-card panel-card priority-center-card">
+      <div className="panel-card-header">
+        <div>
+          <p className="panel-eyebrow">AI Priority Center</p>
+          <h2>Operational Priorities</h2>
+        </div>
+      </div>
+      <div className="priority-grid">
+        <PriorityList
+          title="High Priority"
+          tone="high"
+          items={priorityCenter.high}
+        />
+        <PriorityList
+          title="Medium Priority"
+          tone="medium"
+          items={priorityCenter.medium}
+        />
+        <PriorityList title="Low Priority" tone="low" items={priorityCenter.low} />
+      </div>
+    </section>
+  )
 }
 
 function DashboardPage() {
@@ -157,16 +374,7 @@ function DashboardPage() {
   }, [stats])
 
   if (isLoading && !stats) {
-    return (
-      <div className="dashboard-page">
-        <section className="dashboard-card dashboard-state-card">
-          <div>
-            <h2>Loading dashboard</h2>
-            <p>Fetching the latest owner dashboard data.</p>
-          </div>
-        </section>
-      </div>
-    )
+    return <DashboardSkeleton />
   }
 
   if (error) {
@@ -221,6 +429,8 @@ function DashboardPage() {
         </section>
       ) : null}
 
+      <KPIAlerts alerts={stats.kpiAlerts} />
+
       <DashboardSection
         title="Statistics"
         description="Current operational performance across rooms, revenue, and contracts."
@@ -272,11 +482,16 @@ function DashboardPage() {
           insights={stats.aiInsights}
           emptyMessage="No AI insights yet."
         />
-        <InsightCard
-          title="AI Recommendations"
-          insights={stats.aiRecommendations}
-          emptyMessage="No AI recommendations yet."
-        />
+        <TrendAnalysisCard trends={stats.aiTrends} />
+      </div>
+
+      <div className="dashboard-grid dashboard-grid--two">
+        <MonthlySummaryCard summary={stats.monthlySummary} />
+        <PriorityCenterCard priorityCenter={stats.priorityCenter} />
+      </div>
+
+      <div className="dashboard-grid">
+        <RecommendationsCard recommendations={stats.aiRecommendations} />
       </div>
 
       <div className="dashboard-grid dashboard-grid--two">

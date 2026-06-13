@@ -10,21 +10,27 @@ import {
 } from 'firebase/firestore'
 
 import { db } from '../../../config/firebase'
-import { getRecommendationFromData } from '../../feedbacks/feedback.recommendation-rules'
-import { formatCurrency, formatDate } from '../../../utils/format'
+import { formatDate } from '../../../utils/format'
+import {
+  generateInsights,
+  generateKPIAlerts,
+  generateMonthlySummary,
+  generatePriorityCenter,
+  generateRecommendations,
+  generateTrendAnalysis,
+  type AIInsight,
+  type AIRecommendation,
+  type AITrend,
+  type KPIAlert,
+  type MonthlyAISummary,
+  type PriorityCenter,
+} from './analytics-ai.service'
 
 export type DashboardActivity = {
   id: string
   title: string
   timestamp: string
   type: 'room' | 'tenant' | 'contract' | 'invoice' | 'utility' | 'feedback'
-}
-
-export type DashboardInsight = {
-  id: string
-  title: string
-  description: string
-  severity: 'info' | 'warning' | 'success' | 'danger'
 }
 
 export type OwnerDashboardStats = {
@@ -51,8 +57,12 @@ export type OwnerDashboardStats = {
   occupancyRate: number
   vacantRate: number
   recentActivities: DashboardActivity[]
-  aiInsights: DashboardInsight[]
-  aiRecommendations: DashboardInsight[]
+  aiInsights: AIInsight[]
+  aiRecommendations: AIRecommendation[]
+  aiTrends: AITrend[]
+  monthlySummary: MonthlyAISummary
+  priorityCenter: PriorityCenter
+  kpiAlerts: KPIAlert[]
 }
 
 type DashboardDocument = {
@@ -229,125 +239,6 @@ function createActivities(collections: {
     .slice(0, 6)
 }
 
-function createInsights(stats: Omit<OwnerDashboardStats, 'recentActivities' | 'aiInsights' | 'aiRecommendations'>) {
-  const insights: DashboardInsight[] = []
-
-  if (stats.occupancyRate >= 80) {
-    insights.push({
-      id: 'high-occupancy',
-      title: 'High occupancy rate',
-      description: 'Most rooms are currently occupied.',
-      severity: 'success',
-    })
-  }
-
-  if (stats.vacantRooms > 0) {
-    insights.push({
-      id: 'vacant-rooms',
-      title: 'Vacant rooms available',
-      description: `${stats.vacantRooms} rooms are available for new tenants.`,
-      severity: 'info',
-    })
-  }
-
-  if (stats.overdueInvoices > 0) {
-    insights.push({
-      id: 'overdue-invoices',
-      title: 'Overdue invoices need attention',
-      description: `${stats.overdueInvoices} invoices are currently overdue.`,
-      severity: 'danger',
-    })
-  }
-
-  if (stats.expiringContracts > 0) {
-    insights.push({
-      id: 'expiring-contracts',
-      title: 'Contracts expiring soon',
-      description: `${stats.expiringContracts} active contracts end within 30 days.`,
-      severity: 'warning',
-    })
-  }
-
-  if (stats.urgentFeedback > 0) {
-    insights.push({
-      id: 'urgent-feedback',
-      title: 'Urgent feedback requires action',
-      description: `${stats.urgentFeedback} urgent feedback items need review.`,
-      severity: 'danger',
-    })
-  }
-
-  if (stats.monthlyRevenue > 0) {
-    insights.push({
-      id: 'monthly-revenue',
-      title: 'Revenue activity detected',
-      description: `${formatCurrency(stats.monthlyRevenue)} was collected this month.`,
-      severity: 'success',
-    })
-  }
-
-  return insights
-}
-
-function createAIRecommendations(feedbacks: DashboardDocument[]): DashboardInsight[] {
-  const recommendations: DashboardInsight[] = []
-  const actionCounts = new Map<string, number>()
-  const unresolvedHighPriority = feedbacks.filter((feedback) => {
-    const priority = feedback.data.priority ?? feedback.data.aiSuggestedPriority
-    const status = feedback.data.status
-
-    return (priority === 'high' || priority === 'urgent') && status !== 'resolved' && status !== 'rejected'
-  })
-
-  feedbacks.forEach((feedback) => {
-    const action = getRecommendationFromData(feedback.data).actionLabel
-    actionCounts.set(action, (actionCounts.get(action) ?? 0) + 1)
-  })
-
-  const maintenanceCount = actionCounts.get('Maintenance Inspection') ?? 0
-  if (maintenanceCount >= 3) {
-    recommendations.push({
-      id: 'maintenance-inspection',
-      title: `${maintenanceCount} maintenance complaints reported`,
-      description: 'Consider scheduling a building inspection.',
-      severity: 'warning',
-    })
-  }
-
-  const networkCount = actionCounts.get('Network Check') ?? 0
-  if (networkCount > 0) {
-    recommendations.push({
-      id: 'network-check',
-      title: 'Internet complaints detected',
-      description: 'Check networking equipment and signal quality.',
-      severity: 'info',
-    })
-  }
-
-  if (unresolvedHighPriority.length > 0) {
-    recommendations.push({
-      id: 'urgent-feedback-actions',
-      title: 'High-priority feedback remains unresolved',
-      description: `Review ${unresolvedHighPriority.length} urgent or high-priority request(s).`,
-      severity: 'danger',
-    })
-  }
-
-  if (recommendations.length === 0 && feedbacks.length > 0) {
-    const [topAction, count] = [...actionCounts.entries()]
-      .sort((left, right) => right[1] - left[1])[0] ?? ['General Review', feedbacks.length]
-
-    recommendations.push({
-      id: 'top-feedback-action',
-      title: `${topAction} recommended`,
-      description: `${count} feedback item(s) suggest this action.`,
-      severity: 'info',
-    })
-  }
-
-  return recommendations.slice(0, 4)
-}
-
 export async function getOwnerDashboardStats(
   ownerId: string,
 ): Promise<OwnerDashboardStats> {
@@ -363,7 +254,9 @@ export async function getOwnerDashboardStats(
 
   const totalRooms = rooms.length
   const occupiedRooms = rooms.filter((room) => room.data.status === 'occupied').length
-  const vacantRooms = rooms.filter((room) => room.data.status === 'available').length
+  const vacantRooms = rooms.filter((room) =>
+    room.data.status === 'available' || room.data.status === 'vacant'
+  ).length
   const maintenanceRooms = rooms.filter(
     (room) => room.data.status === 'maintenance',
   ).length
@@ -431,7 +324,53 @@ export async function getOwnerDashboardStats(
       utilityReadings,
       feedbacks,
     }),
-    aiInsights: createInsights(baseStats),
-    aiRecommendations: createAIRecommendations(feedbacks),
+    aiInsights: generateInsights({
+      rooms,
+      tenants,
+      contracts,
+      invoices,
+      utilityReadings,
+      feedbacks,
+    }),
+    aiRecommendations: generateRecommendations({
+      rooms,
+      tenants,
+      contracts,
+      invoices,
+      utilityReadings,
+      feedbacks,
+    }),
+    aiTrends: generateTrendAnalysis({
+      rooms,
+      tenants,
+      contracts,
+      invoices,
+      utilityReadings,
+      feedbacks,
+    }),
+    monthlySummary: generateMonthlySummary({
+      rooms,
+      tenants,
+      contracts,
+      invoices,
+      utilityReadings,
+      feedbacks,
+    }),
+    priorityCenter: generatePriorityCenter({
+      rooms,
+      tenants,
+      contracts,
+      invoices,
+      utilityReadings,
+      feedbacks,
+    }),
+    kpiAlerts: generateKPIAlerts({
+      rooms,
+      tenants,
+      contracts,
+      invoices,
+      utilityReadings,
+      feedbacks,
+    }),
   }
 }
