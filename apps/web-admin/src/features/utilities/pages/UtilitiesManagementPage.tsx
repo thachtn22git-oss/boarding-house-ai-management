@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { StatCard } from '../../../components/dashboard'
+import { getUtilityDisplayStatus } from '../../../utils/payment-status'
 import { useAuth } from '../../auth/useAuth'
 import { getRoomsByOwner } from '../../rooms/services/room.service'
 import type { Room } from '../../rooms/types'
@@ -41,19 +42,14 @@ function getUtilityTypeLabel(utilityType: UtilityType) {
   return utilityType === 'electricity' ? 'Electricity' : 'Water'
 }
 
-function getStatusLabel(status: UtilityReadingStatus) {
+function getStatusLabel(status: string) {
   if (status === 'draft') return 'Draft'
   if (status === 'confirmed') return 'Confirmed'
   if (status === 'paid' || status === 'billed_paid') return 'Paid'
+  if (status === 'unpaid') return 'Unpaid'
+  if (status === 'pending') return 'Pending'
+  if (status === 'failed') return 'Failed'
   return 'Billed'
-}
-
-function getPaymentStatus(reading: UtilityReading) {
-  return reading.paymentStatus ?? (reading.status === 'paid' || reading.status === 'billed_paid' ? 'paid' : 'unpaid')
-}
-
-function getDisplayStatus(reading: UtilityReading) {
-  return getPaymentStatus(reading) === 'paid' ? 'paid' : reading.status
 }
 
 function formatPaymentDate(value: unknown) {
@@ -97,7 +93,8 @@ function UtilityViewModal({
   onSimulateWebhook: () => void
 }) {
   const canSimulateWebhook =
-    import.meta.env.DEV && getPaymentStatus(reading) !== 'paid'
+    import.meta.env.DEV && getUtilityDisplayStatus(reading) !== 'paid'
+  const paymentStatus = reading.paymentStatus ?? getUtilityDisplayStatus(reading)
 
   return (
     <div className="room-modal-backdrop" role="presentation">
@@ -150,7 +147,7 @@ function UtilityViewModal({
             </div>
             <div>
               <dt>Status</dt>
-              <dd>{getStatusLabel(getDisplayStatus(reading))}</dd>
+              <dd>{getStatusLabel(getUtilityDisplayStatus(reading))}</dd>
             </div>
           </dl>
 
@@ -159,7 +156,7 @@ function UtilityViewModal({
             <dl>
               <div>
                 <dt>Payment status</dt>
-                <dd>{getPaymentStatus(reading)}</dd>
+                <dd>{paymentStatus}</dd>
               </div>
               <div>
                 <dt>Payment method</dt>
@@ -544,7 +541,6 @@ function UtilitiesManagementPage() {
                   <th>Unit Price</th>
                   <th>Total Amount</th>
                   <th>Status</th>
-                  <th>Payment Status</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -554,6 +550,7 @@ function UtilitiesManagementPage() {
                   const tenant = reading.tenantId
                     ? tenantById.get(reading.tenantId)
                     : undefined
+                  const displayStatus = getUtilityDisplayStatus(reading)
 
                   return (
                     <tr key={reading.id}>
@@ -574,18 +571,11 @@ function UtilitiesManagementPage() {
                       <td>{currencyFormatter.format(reading.totalAmount)}</td>
                       <td>
                         <span
-                          className={`status-badge utility-status-badge--${getDisplayStatus(reading)}`}
+                          className={`status-badge utility-status-badge--${displayStatus}`}
                         >
-                          {getStatusLabel(getDisplayStatus(reading))}
+                          {getStatusLabel(displayStatus)}
                         </span>
-                      </td>
-                      <td>
-                        <span
-                          className={`status-badge utility-payment-badge--${getPaymentStatus(reading)}`}
-                        >
-                          {getPaymentStatus(reading)}
-                        </span>
-                        {getPaymentStatus(reading) === 'paid' && reading.paidAt ? (
+                        {displayStatus === 'paid' && reading.paidAt ? (
                           <span className="tenant-paid-date">
                             Paid {formatPaymentDate(reading.paidAt)}
                           </span>

@@ -157,11 +157,15 @@
   background: #dbeafe;
 }
 
-.tenant-status-badge--pending,
 .tenant-status-badge--unpaid,
 .tenant-status-badge--in_review {
   color: #92400e;
   background: #fef3c7;
+}
+
+.tenant-status-badge--pending {
+  color: #1e40af;
+  background: #dbeafe;
 }
 
 .tenant-status-badge--failed,

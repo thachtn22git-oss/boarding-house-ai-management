@@ -76,6 +76,21 @@
   background: #dbeafe;
 }
 
+.utility-status-badge--unpaid {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.utility-status-badge--pending {
+  color: #1e40af;
+  background: #dbeafe;
+}
+
+.utility-status-badge--failed {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
 .utility-status-badge--paid,
 .utility-status-badge--billed_paid,
 .utility-payment-badge--paid {

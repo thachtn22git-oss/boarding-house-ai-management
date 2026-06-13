@@ -4,6 +4,7 @@ import { DashboardSection, StatCard } from '../../../components/dashboard'
 import { DEMO_PAYMENT_CONFIG } from '../../../config/demo-payment'
 import { formatVndAmount, generateVietQRUrlForUtility } from '../../../utils/demo-payment'
 import { formatCurrency } from '../../../utils/format'
+import { getUtilityDisplayStatus } from '../../../utils/payment-status'
 import {
   simulateDemoVietQRUtilityPayment,
 } from '../../utilities/services/utility.service'
@@ -12,14 +13,6 @@ import TenantPortalStateView from './TenantPortalStateView'
 import { formatLabel } from './tenantPortalFormatting'
 import { useTenantPortalData } from './useTenantPortalData'
 import './TenantPortal.css'
-
-function getUtilityPaymentStatus(utility: UtilityReading) {
-  return utility.paymentStatus ?? (utility.status === 'paid' || utility.status === 'billed_paid' ? 'paid' : 'unpaid')
-}
-
-function getUtilityDisplayStatus(utility: UtilityReading) {
-  return getUtilityPaymentStatus(utility) === 'paid' ? 'paid' : utility.status
-}
 
 function DemoVietQRUtilityPaymentModal({
   utility,
@@ -242,56 +235,50 @@ function MyUtilitiesPage() {
                   <th>Usage</th>
                   <th>Total Amount</th>
                   <th>Status</th>
-                  <th>Payment Status</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {utilities.map((utility) => (
-                  <tr key={utility.id}>
-                    <td>
-                      <span
-                        className={`tenant-type-badge tenant-type-badge--${utility.utilityType}`}
-                      >
-                        {formatLabel(utility.utilityType)}
-                      </span>
-                    </td>
-                    <td>{utility.billingMonth}</td>
-                    <td>{utility.previousReading}</td>
-                    <td>{utility.currentReading}</td>
-                    <td>{utility.usage}</td>
-                    <td>{formatCurrency(utility.totalAmount)}</td>
-                    <td>
-                      <span
-                        className={`tenant-status-badge tenant-status-badge--${getUtilityDisplayStatus(utility)}`}
-                      >
-                        {formatLabel(getUtilityDisplayStatus(utility))}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className={`tenant-status-badge tenant-status-badge--${getUtilityPaymentStatus(utility)}`}
-                      >
-                        {formatLabel(getUtilityPaymentStatus(utility))}
-                      </span>
-                    </td>
-                    <td>
-                      {getUtilityPaymentStatus(utility) !== 'paid' ? (
-                        <button
-                          className="table-action-button"
-                          type="button"
-                          onClick={() => setPaymentUtility(utility)}
+                {utilities.map((utility) => {
+                  const displayStatus = getUtilityDisplayStatus(utility)
+
+                  return (
+                    <tr key={utility.id}>
+                      <td>
+                        <span
+                          className={`tenant-type-badge tenant-type-badge--${utility.utilityType}`}
                         >
-                          Pay with VietQR
-                        </button>
-                      ) : utility.paidAt ? (
-                        <span className="tenant-paid-date">Paid</span>
-                      ) : (
-                        <span className="tenant-paid-date">Paid</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                          {formatLabel(utility.utilityType)}
+                        </span>
+                      </td>
+                      <td>{utility.billingMonth}</td>
+                      <td>{utility.previousReading}</td>
+                      <td>{utility.currentReading}</td>
+                      <td>{utility.usage}</td>
+                      <td>{formatCurrency(utility.totalAmount)}</td>
+                      <td>
+                        <span
+                          className={`tenant-status-badge tenant-status-badge--${displayStatus}`}
+                        >
+                          {formatLabel(displayStatus)}
+                        </span>
+                      </td>
+                      <td>
+                        {displayStatus !== 'paid' ? (
+                          <button
+                            className="table-action-button"
+                            type="button"
+                            onClick={() => setPaymentUtility(utility)}
+                          >
+                            Pay with VietQR
+                          </button>
+                        ) : (
+                          <span className="tenant-paid-date">Paid</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

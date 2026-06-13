@@ -4,6 +4,7 @@ import { DashboardSection, StatCard } from '../../../components/dashboard'
 import { DEMO_PAYMENT_CONFIG } from '../../../config/demo-payment'
 import { formatVndAmount, generateVietQRUrl } from '../../../utils/demo-payment'
 import { formatCurrency, formatDate } from '../../../utils/format'
+import { getInvoiceDisplayStatus } from '../../../utils/payment-status'
 import {
   simulateDemoVietQRInvoicePayment,
 } from '../../invoices/services/invoice.service'
@@ -23,8 +24,8 @@ function TenantInvoiceViewModal({
   onClose: () => void
 }) {
   const remainingAmount = Math.max(invoice.totalAmount - invoice.paidAmount, 0)
-  const paymentStatus = invoice.paymentStatus ?? (invoice.status === 'paid' ? 'paid' : 'unpaid')
-  const canPay = invoice.status !== 'paid' && invoice.status !== 'cancelled'
+  const displayStatus = getInvoiceDisplayStatus(invoice)
+  const canPay = displayStatus !== 'paid' && invoice.status !== 'cancelled'
 
   return (
     <div className="room-modal-backdrop" role="presentation">
@@ -81,11 +82,7 @@ function TenantInvoiceViewModal({
             </div>
             <div>
               <dt>Status</dt>
-              <dd>{formatLabel(invoice.status)}</dd>
-            </div>
-            <div>
-              <dt>Payment Status</dt>
-              <dd>{formatLabel(paymentStatus)}</dd>
+              <dd>{formatLabel(displayStatus)}</dd>
             </div>
             <div>
               <dt>Payment Method</dt>
@@ -236,9 +233,9 @@ function MyInvoicesPage() {
 
   const stats = useMemo(
     () => ({
-      paid: invoices.filter((invoice) => invoice.status === 'paid').length,
-      unpaid: invoices.filter((invoice) => invoice.status === 'unpaid').length,
-      overdue: invoices.filter((invoice) => invoice.status === 'overdue').length,
+      paid: invoices.filter((invoice) => getInvoiceDisplayStatus(invoice) === 'paid').length,
+      unpaid: invoices.filter((invoice) => getInvoiceDisplayStatus(invoice) === 'unpaid').length,
+      overdue: invoices.filter((invoice) => getInvoiceDisplayStatus(invoice) === 'overdue').length,
     }),
     [invoices],
   )
@@ -326,59 +323,55 @@ function MyInvoicesPage() {
                   <th>Total Amount</th>
                   <th>Paid Amount</th>
                   <th>Status</th>
-                  <th>Payment</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {invoices.map((invoice) => (
-                  <tr key={invoice.id}>
-                    <td>{invoice.invoiceCode}</td>
-                    <td>{invoice.billingMonth}</td>
-                    <td>{invoice.dueDate}</td>
-                    <td>{formatCurrency(invoice.totalAmount)}</td>
-                    <td>{formatCurrency(invoice.paidAmount)}</td>
-                    <td>
-                      <span
-                        className={`tenant-status-badge tenant-status-badge--${invoice.status}`}
-                      >
-                        {formatLabel(invoice.status)}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className={`tenant-status-badge tenant-status-badge--${invoice.paymentStatus ?? (invoice.status === 'paid' ? 'paid' : 'unpaid')}`}
-                      >
-                        {formatLabel(invoice.paymentStatus ?? (invoice.status === 'paid' ? 'paid' : 'unpaid'))}
-                      </span>
-                      {invoice.status === 'paid' && invoice.paidAt ? (
-                        <span className="tenant-paid-date">
-                          Paid {formatDate(invoice.paidAt)}
-                        </span>
-                      ) : null}
-                    </td>
-                    <td>
-                      <div className="room-table-actions">
-                        <button
-                          className="table-action-button"
-                          type="button"
-                          onClick={() => setSelectedInvoice(invoice)}
+                {invoices.map((invoice) => {
+                  const displayStatus = getInvoiceDisplayStatus(invoice)
+
+                  return (
+                    <tr key={invoice.id}>
+                      <td>{invoice.invoiceCode}</td>
+                      <td>{invoice.billingMonth}</td>
+                      <td>{invoice.dueDate}</td>
+                      <td>{formatCurrency(invoice.totalAmount)}</td>
+                      <td>{formatCurrency(invoice.paidAmount)}</td>
+                      <td>
+                        <span
+                          className={`tenant-status-badge tenant-status-badge--${displayStatus}`}
                         >
-                          View Invoice
-                        </button>
-                        {invoice.status !== 'paid' && invoice.status !== 'cancelled' ? (
+                          {formatLabel(displayStatus)}
+                        </span>
+                        {displayStatus === 'paid' && invoice.paidAt ? (
+                          <span className="tenant-paid-date">
+                            Paid {formatDate(invoice.paidAt)}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td>
+                        <div className="room-table-actions">
                           <button
                             className="table-action-button"
                             type="button"
-                            onClick={() => setPaymentInvoice(invoice)}
+                            onClick={() => setSelectedInvoice(invoice)}
                           >
-                            Pay with VietQR
+                            View Invoice
                           </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {displayStatus !== 'paid' && invoice.status !== 'cancelled' ? (
+                            <button
+                              className="table-action-button"
+                              type="button"
+                              onClick={() => setPaymentInvoice(invoice)}
+                            >
+                              Pay with VietQR
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

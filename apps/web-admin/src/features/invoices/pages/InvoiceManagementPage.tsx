@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { StatCard } from '../../../components/dashboard'
+import { getInvoiceDisplayStatus } from '../../../utils/payment-status'
 import { useAuth } from '../../auth/useAuth'
 import { getContractsByOwner } from '../../contracts/services/contract.service'
 import type { Contract } from '../../contracts/types'
@@ -18,7 +19,7 @@ import {
   simulateDemoVietQRInvoicePayment,
   updateInvoice,
 } from '../services/invoice.service'
-import type { Invoice, InvoiceFormValues, InvoiceStatus } from '../types'
+import type { Invoice, InvoiceFormValues } from '../types'
 import '../../rooms/pages/RoomManagementPage.css'
 import '../../tenants/pages/TenantManagementPage.css'
 import '../../contracts/pages/ContractManagementPage.css'
@@ -30,10 +31,12 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 })
 
-function getStatusLabel(status: InvoiceStatus) {
+function getStatusLabel(status: string) {
   if (status === 'draft') return 'Draft'
   if (status === 'unpaid') return 'Unpaid'
   if (status === 'paid') return 'Paid'
+  if (status === 'pending') return 'Pending'
+  if (status === 'failed') return 'Failed'
   if (status === 'overdue') return 'Overdue'
   return 'Cancelled'
 }
@@ -97,10 +100,10 @@ function InvoiceManagementPage() {
   const stats = useMemo(
     () => ({
       total: ownerInvoices.length,
-      unpaid: ownerInvoices.filter((invoice) => invoice.status === 'unpaid')
+      unpaid: ownerInvoices.filter((invoice) => getInvoiceDisplayStatus(invoice) === 'unpaid')
         .length,
-      paid: ownerInvoices.filter((invoice) => invoice.status === 'paid').length,
-      overdue: ownerInvoices.filter((invoice) => invoice.status === 'overdue')
+      paid: ownerInvoices.filter((invoice) => getInvoiceDisplayStatus(invoice) === 'paid').length,
+      overdue: ownerInvoices.filter((invoice) => getInvoiceDisplayStatus(invoice) === 'overdue')
         .length,
       revenue: ownerInvoices.reduce(
         (sum, invoice) => sum + invoice.paidAmount,
@@ -342,6 +345,7 @@ function InvoiceManagementPage() {
                 {ownerInvoices.map((invoice) => {
                   const tenant = tenantById.get(invoice.tenantId)
                   const room = roomById.get(invoice.roomId)
+                  const displayStatus = getInvoiceDisplayStatus(invoice)
 
                   return (
                     <tr key={invoice.id}>
@@ -354,9 +358,9 @@ function InvoiceManagementPage() {
                       <td>{currencyFormatter.format(invoice.paidAmount)}</td>
                       <td>
                         <span
-                          className={`status-badge invoice-status-badge--${invoice.status}`}
+                          className={`status-badge invoice-status-badge--${displayStatus}`}
                         >
-                          {getStatusLabel(invoice.status)}
+                          {getStatusLabel(displayStatus)}
                         </span>
                       </td>
                       <td>
@@ -375,7 +379,7 @@ function InvoiceManagementPage() {
                           >
                             Edit
                           </button>
-                          {invoice.status !== 'paid' &&
+                          {displayStatus !== 'paid' &&
                           invoice.status !== 'cancelled' ? (
                             <button
                               className="table-action-button"

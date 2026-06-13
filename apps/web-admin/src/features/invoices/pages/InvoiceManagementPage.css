@@ -112,6 +112,11 @@
   background: #fef3c7;
 }
 
+.invoice-status-badge--pending {
+  color: #1e40af;
+  background: #dbeafe;
+}
+
 .invoice-status-badge--paid {
   color: #166534;
   background: #dcfce7;
@@ -122,6 +127,7 @@
   background: #dbeafe;
 }
 
+.invoice-status-badge--failed,
 .invoice-status-badge--overdue {
   color: #991b1b;
   background: #fee2e2;
