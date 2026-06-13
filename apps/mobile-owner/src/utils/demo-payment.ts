@@ -1,5 +1,5 @@
 import { DEMO_PAYMENT_CONFIG } from '../config/demo-payment'
-import type { Invoice } from '../types/models'
+import type { Invoice, UtilityReading } from '../types/models'
 
 export function getDemoVietQRAmount(invoice: Pick<Invoice, 'totalAmount'>) {
   return Math.max(0, Math.round(Number(invoice.totalAmount ?? 0)))
@@ -10,6 +10,24 @@ export function generateVietQRUrl(invoice: Pick<Invoice, 'invoiceCode' | 'totalA
   const params = [
     `amount=${encodeURIComponent(String(amount))}`,
     `addInfo=${encodeURIComponent(invoice.invoiceCode)}`,
+    `accountName=${encodeURIComponent(DEMO_PAYMENT_CONFIG.accountName)}`,
+  ].join('&')
+
+  return `https://img.vietqr.io/image/${DEMO_PAYMENT_CONFIG.bankId}-${DEMO_PAYMENT_CONFIG.accountNo}-compact2.png?${params}`
+}
+
+export function generateVietQRUrlForUtility(
+  utility: Pick<UtilityReading, 'id' | 'billingMonth' | 'totalAmount'> & {
+    roomNumber?: string
+  },
+) {
+  const amount = Math.max(0, Math.round(Number(utility.totalAmount ?? 0)))
+  const transferContent = utility.roomNumber
+    ? `UTILITY-${utility.billingMonth}-${utility.roomNumber}`
+    : `UTILITY-${utility.id}`
+  const params = [
+    `amount=${encodeURIComponent(String(amount))}`,
+    `addInfo=${encodeURIComponent(transferContent)}`,
     `accountName=${encodeURIComponent(DEMO_PAYMENT_CONFIG.accountName)}`,
   ].join('&')
 

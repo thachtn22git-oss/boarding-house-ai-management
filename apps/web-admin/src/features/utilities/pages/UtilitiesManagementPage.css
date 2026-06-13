@@ -76,9 +76,67 @@
   background: #dbeafe;
 }
 
+.utility-status-badge--paid,
+.utility-status-badge--billed_paid,
+.utility-payment-badge--paid {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.utility-payment-badge--unpaid {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.utility-payment-badge--pending {
+  color: #1e40af;
+  background: #dbeafe;
+}
+
+.utility-payment-badge--failed {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.utility-payment-info {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  background: #f8fafc;
+}
+
+.utility-payment-info h3 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 16px;
+}
+
+.utility-payment-info dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.utility-payment-info dt {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.utility-payment-info dd {
+  margin: 4px 0 0;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 800;
+}
+
 @media (max-width: 900px) {
   .utilities-filter-card,
-  .utility-form {
+  .utility-form,
+  .utility-payment-info dl {
     grid-template-columns: 1fr;
   }
 

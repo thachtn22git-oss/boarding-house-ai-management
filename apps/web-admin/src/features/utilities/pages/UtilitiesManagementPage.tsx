@@ -13,6 +13,7 @@ import {
   deleteUtilityReading,
   getUtilityReadingsByOwner,
   markUtilityReadingAsBilled,
+  simulateDemoVietQRUtilityPayment,
   updateUtilityReading,
 } from '../services/utility.service'
 import type {
@@ -43,7 +44,169 @@ function getUtilityTypeLabel(utilityType: UtilityType) {
 function getStatusLabel(status: UtilityReadingStatus) {
   if (status === 'draft') return 'Draft'
   if (status === 'confirmed') return 'Confirmed'
+  if (status === 'paid' || status === 'billed_paid') return 'Paid'
   return 'Billed'
+}
+
+function getPaymentStatus(reading: UtilityReading) {
+  return reading.paymentStatus ?? (reading.status === 'paid' || reading.status === 'billed_paid' ? 'paid' : 'unpaid')
+}
+
+function formatPaymentDate(value: unknown) {
+  if (!value) return '-'
+
+  const date =
+    typeof value === 'object' && value !== null && 'toDate' in value
+      ? (value as { toDate: () => Date }).toDate()
+      : typeof value === 'string'
+        ? new Date(value)
+        : value instanceof Date
+          ? value
+          : null
+
+  if (!date || Number.isNaN(date.getTime())) {
+    return '-'
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function UtilityViewModal({
+  reading,
+  room,
+  tenant,
+  processingWebhook,
+  onClose,
+  onSimulateWebhook,
+}: {
+  reading: UtilityReading
+  room?: Room
+  tenant?: Tenant
+  processingWebhook: boolean
+  onClose: () => void
+  onSimulateWebhook: () => void
+}) {
+  const canSimulateWebhook =
+    import.meta.env.DEV && getPaymentStatus(reading) !== 'paid'
+
+  return (
+    <div className="room-modal-backdrop" role="presentation">
+      <section
+        className="room-modal utility-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="utility-view-title"
+      >
+        <div className="room-modal-header">
+          <div>
+            <p className="page-eyebrow">Utility Details</p>
+            <h2 id="utility-view-title">{getUtilityTypeLabel(reading.utilityType)}</h2>
+          </div>
+          <button
+            className="room-modal-close"
+            type="button"
+            onClick={onClose}
+            aria-label="Close utility details"
+          >
+            x
+          </button>
+        </div>
+
+        <div className="contract-summary invoice-summary">
+          <dl>
+            <div>
+              <dt>Utility type</dt>
+              <dd>{getUtilityTypeLabel(reading.utilityType)}</dd>
+            </div>
+            <div>
+              <dt>Billing month</dt>
+              <dd>{reading.billingMonth}</dd>
+            </div>
+            <div>
+              <dt>Room</dt>
+              <dd>{room ? `${room.roomNumber} - ${room.roomType}` : '-'}</dd>
+            </div>
+            <div>
+              <dt>Tenant</dt>
+              <dd>{tenant ? `${tenant.fullName} - ${tenant.email}` : '-'}</dd>
+            </div>
+            <div>
+              <dt>Usage</dt>
+              <dd>{reading.usage}</dd>
+            </div>
+            <div>
+              <dt>Total amount</dt>
+              <dd>{currencyFormatter.format(reading.totalAmount)}</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>{getStatusLabel(reading.status)}</dd>
+            </div>
+          </dl>
+
+          <div className="utility-payment-info">
+            <h3>Payment Information</h3>
+            <dl>
+              <div>
+                <dt>Payment status</dt>
+                <dd>{getPaymentStatus(reading)}</dd>
+              </div>
+              <div>
+                <dt>Payment method</dt>
+                <dd>
+                  {reading.paymentMethod === 'demo_vietqr' ? (
+                    <span className="status-badge invoice-payment-badge--vietqr">
+                      Demo VietQR
+                    </span>
+                  ) : (
+                    reading.paymentMethod ?? '-'
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>Payment reference</dt>
+                <dd>{reading.paymentReference ?? '-'}</dd>
+              </div>
+              <div>
+                <dt>Paid amount</dt>
+                <dd>{currencyFormatter.format(reading.paidAmount ?? 0)}</dd>
+              </div>
+              <div>
+                <dt>Paid at</dt>
+                <dd>{formatPaymentDate(reading.paidAt)}</dd>
+              </div>
+              <div>
+                <dt>QR provider</dt>
+                <dd>{reading.qrProvider ?? '-'}</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+
+        <div className="room-form-actions">
+          <button className="secondary-button" type="button" onClick={onClose}>
+            Close
+          </button>
+          {canSimulateWebhook ? (
+            <button
+              className="primary-button"
+              type="button"
+              onClick={onSimulateWebhook}
+              disabled={processingWebhook}
+            >
+              {processingWebhook ? 'Processing...' : 'Simulate VietQR Callback'}
+            </button>
+          ) : null}
+        </div>
+      </section>
+    </div>
+  )
 }
 
 function UtilitiesManagementPage() {
@@ -56,6 +219,8 @@ function UtilitiesManagementPage() {
   const [error, setError] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingReading, setEditingReading] = useState<UtilityReading | null>(null)
+  const [viewingReading, setViewingReading] = useState<UtilityReading | null>(null)
+  const [processingWebhookReadingId, setProcessingWebhookReadingId] = useState<string | null>(null)
   const [utilityTypeFilter, setUtilityTypeFilter] =
     useState<UtilityTypeFilter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -329,6 +494,7 @@ function UtilitiesManagementPage() {
             <option value="draft">Draft</option>
             <option value="confirmed">Confirmed</option>
             <option value="billed">Billed</option>
+            <option value="paid">Paid</option>
           </select>
         </label>
         <label>
@@ -374,6 +540,7 @@ function UtilitiesManagementPage() {
                   <th>Unit Price</th>
                   <th>Total Amount</th>
                   <th>Status</th>
+                  <th>Payment Status</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -409,7 +576,26 @@ function UtilitiesManagementPage() {
                         </span>
                       </td>
                       <td>
+                        <span
+                          className={`status-badge utility-payment-badge--${getPaymentStatus(reading)}`}
+                        >
+                          {getPaymentStatus(reading)}
+                        </span>
+                        {getPaymentStatus(reading) === 'paid' && reading.paidAt ? (
+                          <span className="tenant-paid-date">
+                            Paid {formatPaymentDate(reading.paidAt)}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td>
                         <div className="room-table-actions">
+                          <button
+                            className="table-action-button"
+                            type="button"
+                            onClick={() => setViewingReading(reading)}
+                          >
+                            View
+                          </button>
                           <button
                             className="table-action-button"
                             type="button"
@@ -468,6 +654,38 @@ function UtilitiesManagementPage() {
             }
           }}
           onSubmit={handleSubmit}
+        />
+      ) : null}
+
+      {viewingReading ? (
+        <UtilityViewModal
+          reading={viewingReading}
+          room={roomById.get(viewingReading.roomId)}
+          tenant={viewingReading.tenantId ? tenantById.get(viewingReading.tenantId) : undefined}
+          processingWebhook={processingWebhookReadingId === viewingReading.id}
+          onClose={() => setViewingReading(null)}
+          onSimulateWebhook={() => {
+            const room = roomById.get(viewingReading.roomId)
+            const tenant = viewingReading.tenantId
+              ? tenantById.get(viewingReading.tenantId)
+              : undefined
+
+            setProcessingWebhookReadingId(viewingReading.id)
+            void simulateDemoVietQRUtilityPayment(
+              viewingReading.id,
+              tenant?.fullName ?? 'Tenant',
+              room?.roomNumber,
+            )
+              .then(loadUtilitiesData)
+              .then(() => {
+                setViewingReading(null)
+                window.alert('Demo VietQR utility callback processed successfully.')
+              })
+              .catch(() => {
+                setError('Unable to process demo utility callback. Please try again.')
+              })
+              .finally(() => setProcessingWebhookReadingId(null))
+          }}
         />
       ) : null}
     </div>

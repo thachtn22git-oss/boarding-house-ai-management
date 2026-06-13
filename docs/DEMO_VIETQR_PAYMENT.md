@@ -1,6 +1,6 @@
 # Demo VietQR Invoice Payment
 
-This document describes the demo-only VietQR payment flow used by the Boarding House AI Management System.
+This document describes the demo-only VietQR payment flow used by the Boarding House AI Management System for invoices and utility bills.
 
 ## Purpose
 
@@ -34,7 +34,7 @@ https://img.vietqr.io/image/{bankId}-{accountNo}-compact2.png?amount={amount}&ad
 
 The app encodes query parameters and uses the invoice code as transfer content.
 
-## Demo Flow
+## Invoice Demo Flow
 
 1. Tenant opens an invoice.
 2. Tenant selects `Pay with VietQR`.
@@ -43,7 +43,19 @@ The app encodes query parameters and uses the invoice code as transfer content.
 5. The app marks the invoice as paid in Firestore.
 6. The owner receives an invoice payment notification.
 
-## Firestore Update
+## Utility Bill Demo Flow
+
+1. Tenant opens `My Utilities`.
+2. Tenant selects an unpaid utility bill.
+3. Tenant selects `Pay with VietQR`.
+4. The app shows a real VietQR image URL preview and transfer information.
+5. Tenant selects `I have completed payment (Demo)`.
+6. The app marks the utility bill as paid in Firestore.
+7. The owner receives a utility payment notification.
+
+Invoice and utility payment flows share the same demo VietQR approach. The QR image is real and scannable, but payment confirmation is simulated inside the app.
+
+## Invoice Firestore Update
 
 When the demo payment is completed, the invoice is updated with:
 
@@ -55,6 +67,20 @@ When the demo payment is completed, the invoice is updated with:
 - `paidAt: serverTimestamp()`
 - `qrProvider: "vietqr_demo"`
 - `qrPayload: generatedVietQRUrl`
+- `updatedAt: serverTimestamp()`
+
+## Utility Firestore Update
+
+When the demo utility payment is completed, the utility reading is updated with:
+
+- `paymentStatus: "paid"`
+- `paymentMethod: "demo_vietqr"`
+- `paymentReference: "DEMO-VIETQR-UTILITY-" + Date.now()`
+- `paidAmount: totalAmount`
+- `paidAt: serverTimestamp()`
+- `qrProvider: "vietqr_demo"`
+- `qrPayload: generatedVietQRUrl`
+- `status: "paid"`
 - `updatedAt: serverTimestamp()`
 
 ## Production Integration

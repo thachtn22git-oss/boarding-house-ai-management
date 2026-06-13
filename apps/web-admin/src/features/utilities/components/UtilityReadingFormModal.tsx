@@ -30,6 +30,7 @@ const statusOptions: Array<{ label: string; value: UtilityReadingStatus }> = [
   { label: 'Draft', value: 'draft' },
   { label: 'Confirmed', value: 'confirmed' },
   { label: 'Billed', value: 'billed' },
+  { label: 'Paid', value: 'paid' },
 ]
 
 const defaultValues: UtilityReadingFormValues = {

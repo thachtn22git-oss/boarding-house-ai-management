@@ -7,12 +7,13 @@ import { StatCard } from '../../components/cards/StatCard'
 import { colors, spacing } from '../../constants/theme'
 import { useAuth } from '../../providers/AuthProvider'
 import { DEMO_PAYMENT_CONFIG } from '../../config/demo-payment'
-import { formatVndAmount } from '../../utils/demo-payment'
+import { formatVndAmount, generateVietQRUrlForUtility } from '../../utils/demo-payment'
 import {
   buildDemoVietQRUrl,
   createTenantFeedback,
   getCurrentTenant,
   simulateTenantInvoiceDemoPayment,
+  simulateTenantUtilityDemoPayment,
   type TenantFeedbackValues,
   type TenantPortalData,
 } from '../../services/tenantPortal.service'
@@ -141,6 +142,9 @@ export function MyInvoicesScreen() {
 export function MyUtilitiesScreen() {
   const { data, loading, error, reload } = useTenantPortalData()
   const utilities = data?.utilities ?? []
+  const [selectedUtility, setSelectedUtility] = useState<UtilityReading | null>(null)
+  const tenantName = data?.tenant?.fullName ?? 'Tenant'
+  const roomNumber = data?.room?.roomNumber
 
   return (
     <Screen loading={loading} onRefresh={reload} refreshing={loading} subtitle="Your electricity and water readings." title="My Utilities">
@@ -159,9 +163,25 @@ export function MyUtilitiesScreen() {
           <Text style={styles.meta}>Unit Price: {formatCurrency(reading.unitPrice)}</Text>
           <Text style={styles.meta}>Total Amount: {formatCurrency(reading.totalAmount)}</Text>
           <Text style={styles.meta}>Status: {reading.status}</Text>
-          <PrimaryButton label="View Details" onPress={() => showUtilityDetails(reading)} variant="secondary" />
+          <Text style={styles.meta}>Payment Status: {getUtilityPaymentStatus(reading)}</Text>
+          <View style={styles.actions}>
+            <PrimaryButton label="View Details" onPress={() => showUtilityDetails(reading)} variant="secondary" />
+            {getUtilityPaymentStatus(reading) !== 'paid' ? (
+              <PrimaryButton label="Pay with VietQR" onPress={() => setSelectedUtility(reading)} />
+            ) : null}
+          </View>
         </ListCard>
       ))}
+      <UtilityPaymentModal
+        reading={selectedUtility}
+        tenantName={tenantName}
+        roomNumber={roomNumber}
+        onClose={() => setSelectedUtility(null)}
+        onPaid={async () => {
+          setSelectedUtility(null)
+          await reload()
+        }}
+      />
     </Screen>
   )
 }
@@ -359,8 +379,94 @@ function showUtilityDetails(reading: UtilityReading) {
     `Unit Price: ${formatCurrency(reading.unitPrice)}`,
     `Total Amount: ${formatCurrency(reading.totalAmount)}`,
     `Status: ${reading.status}`,
+    `Payment Status: ${getUtilityPaymentStatus(reading)}`,
+    `Payment Method: ${reading.paymentMethod ?? 'Not available'}`,
+    `Payment Reference: ${reading.paymentReference ?? 'Not available'}`,
+    `Paid Amount: ${formatCurrency(reading.paidAmount)}`,
+    `Paid At: ${formatDate(reading.paidAt)}`,
     `Note: ${reading.note ?? 'Not available'}`,
   ].join('\n'))
+}
+
+function UtilityPaymentModal({
+  reading,
+  tenantName,
+  roomNumber,
+  onClose,
+  onPaid,
+}: {
+  reading: UtilityReading | null
+  tenantName: string
+  roomNumber?: string
+  onClose: () => void
+  onPaid: () => Promise<void>
+}) {
+  const [processingPayment, setProcessingPayment] = useState(false)
+  const [qrImageFailed, setQrImageFailed] = useState(false)
+
+  if (!reading) return null
+
+  const currentReading = reading
+  const transferContent = roomNumber
+    ? `UTILITY-${reading.billingMonth}-${roomNumber}`
+    : `UTILITY-${reading.id}`
+  const qrUrl = generateVietQRUrlForUtility({ ...reading, roomNumber })
+
+  async function completeDemoPayment() {
+    setProcessingPayment(true)
+    try {
+      await simulateTenantUtilityDemoPayment(currentReading, tenantName, roomNumber)
+      Alert.alert('Demo VietQR', 'Demo VietQR utility payment completed. Utility bill marked as paid.')
+      await onPaid()
+    } catch (paymentError) {
+      console.warn('Demo utility payment failed.', paymentError)
+      Alert.alert('Demo VietQR', 'Unable to complete demo utility payment. Please try again.')
+    } finally {
+      setProcessingPayment(false)
+    }
+  }
+
+  return (
+    <Modal animationType="fade" transparent visible={!!reading} onRequestClose={onClose}>
+      <View style={styles.paymentBackdrop}>
+        <View style={styles.paymentCard}>
+          <Text style={styles.modalTitle}>Demo VietQR Utility Payment</Text>
+          <Text style={styles.demoPaymentNoticeTitle}>Demo payment only</Text>
+          <Text style={styles.meta}>No real transaction is verified by this system.</Text>
+          <View style={styles.qrFallbackBox}>
+            {qrImageFailed ? (
+              <>
+                <Text style={styles.qrFallbackTitle}>QR image unavailable.</Text>
+                <Text style={styles.qrPayload}>{qrUrl}</Text>
+              </>
+            ) : (
+              <Image
+                resizeMode="contain"
+                source={{ uri: qrUrl }}
+                style={styles.vietQrImage}
+                onError={() => setQrImageFailed(true)}
+              />
+            )}
+          </View>
+          <Text style={styles.meta}>Utility Type: {capitalize(reading.utilityType)}</Text>
+          <Text style={styles.meta}>Billing Month: {reading.billingMonth}</Text>
+          <Text style={styles.meta}>Amount: {formatVndAmount(reading.totalAmount)}</Text>
+          <Text style={styles.meta}>Bank Name: {DEMO_PAYMENT_CONFIG.bankName}</Text>
+          <Text style={styles.meta}>Account Number: {DEMO_PAYMENT_CONFIG.accountNo}</Text>
+          <Text style={styles.meta}>Account Name: {DEMO_PAYMENT_CONFIG.accountName}</Text>
+          <Text style={styles.meta}>Transfer Content: {transferContent}</Text>
+          <View style={styles.actions}>
+            <PrimaryButton disabled={processingPayment} label="Cancel" onPress={onClose} variant="secondary" />
+            <PrimaryButton disabled={processingPayment} label={processingPayment ? 'Processing...' : 'I have completed payment (Demo)'} onPress={() => void completeDemoPayment()} />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
+function getUtilityPaymentStatus(reading: UtilityReading) {
+  return reading.paymentStatus ?? (reading.status === 'paid' || reading.status === 'billed_paid' ? 'paid' : 'unpaid')
 }
 
 function showFeedbackDetails(feedback: Feedback) {

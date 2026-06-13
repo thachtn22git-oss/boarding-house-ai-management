@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import { isSupabaseConfigured, supabase } from '../../lib/supabase'
+import { formatVndAmount } from '../../utils/demo-payment'
 import { formatCurrency } from '../../utils/format'
 
 export type AssistantIntent =
@@ -259,7 +260,12 @@ async function generateOwnerAnswer(ownerId: string, intent: AssistantIntent) {
     const electricity = readings.filter((reading) => reading.data.utilityType === 'electricity').reduce((sum, reading) => sum + Number(reading.data.usage ?? 0), 0)
     const water = readings.filter((reading) => reading.data.utilityType === 'water').reduce((sum, reading) => sum + Number(reading.data.usage ?? 0), 0)
     const total = readings.reduce((sum, reading) => sum + Number(reading.data.totalAmount ?? 0), 0)
-    answer = `This month, electricity usage is ${electricity} unit(s), water usage is ${water} unit(s), and utility charges are ${formatCurrency(total)}.`
+    const paid = readings
+      .filter((reading) => reading.data.paymentStatus === 'paid' || reading.data.status === 'paid')
+      .reduce((sum, reading) => sum + Number(reading.data.paidAmount ?? reading.data.totalAmount ?? 0), 0)
+    const unpaidReadings = readings.filter((reading) => reading.data.paymentStatus !== 'paid' && reading.data.status !== 'paid')
+    const unpaid = unpaidReadings.reduce((sum, reading) => sum + Number(reading.data.totalAmount ?? 0), 0)
+    answer = `This month, electricity usage is ${electricity} unit(s), water usage is ${water} unit(s). Total utility charges are ${formatVndAmount(total)}. Paid amount is ${formatVndAmount(paid)} and unpaid amount is ${formatVndAmount(unpaid)} across ${unpaidReadings.length} unpaid utility bill(s).`
   }
 
   if (intent === 'tenant_count') {

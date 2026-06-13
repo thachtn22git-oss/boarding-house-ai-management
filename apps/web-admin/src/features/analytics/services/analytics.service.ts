@@ -456,6 +456,12 @@ export function getUtilityAnalytics(
   utilities: Array<{ id: string; data: DocumentData }>,
 ) {
   const monthlyGroups = new Map<string, UtilityTrendPoint>()
+  const paidUtilities = utilities.filter(
+    (utility) => utility.data.paymentStatus === 'paid' || utility.data.status === 'paid',
+  )
+  const pendingUtilities = utilities.filter(
+    (utility) => utility.data.paymentStatus !== 'paid' && utility.data.status !== 'paid',
+  )
 
   utilities.forEach((utility) => {
     const monthKey = String(utility.data.billingMonth || getMonthKey(utility.data.createdAt))
@@ -495,6 +501,14 @@ export function getUtilityAnalytics(
         ? waterReadings.reduce((sum, utility) => sum + Number(utility.data.usage ?? 0), 0) /
           waterReadings.length
         : 0,
+    paidAmount: paidUtilities.reduce(
+      (sum, utility) => sum + Number(utility.data.paidAmount ?? utility.data.totalAmount ?? 0),
+      0,
+    ),
+    pendingAmount: pendingUtilities.reduce(
+      (sum, utility) => sum + Number(utility.data.totalAmount ?? 0),
+      0,
+    ),
   }
 }
 

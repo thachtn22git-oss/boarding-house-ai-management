@@ -6,7 +6,7 @@ export type PaymentStatus = 'unpaid' | 'pending' | 'paid' | 'failed'
 export type PaymentMethod = 'manual' | 'demo_vietqr'
 export type QRProvider = 'vietqr_demo'
 export type UtilityType = 'electricity' | 'water'
-export type UtilityReadingStatus = 'draft' | 'confirmed' | 'billed'
+export type UtilityReadingStatus = 'draft' | 'confirmed' | 'billed' | 'paid' | 'billed_paid'
 export type FeedbackStatus = 'new' | 'in_review' | 'resolved' | 'rejected'
 export type FeedbackPriority = 'low' | 'medium' | 'high' | 'urgent'
 export type FeedbackCategory =
@@ -112,6 +112,13 @@ export interface UtilityReading {
   unitPrice?: number
   totalAmount: number
   status: UtilityReadingStatus
+  paymentStatus?: PaymentStatus
+  paymentMethod?: PaymentMethod
+  paymentReference?: string | null
+  paidAt?: unknown
+  paidAmount?: number
+  qrProvider?: QRProvider
+  qrPayload?: string | null
   note?: string
 }
 

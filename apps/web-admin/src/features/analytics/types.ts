@@ -104,6 +104,8 @@ export type AnalyticsData = {
     trend: UtilityTrendPoint[]
     averageElectricityUsage: number
     averageWaterUsage: number
+    paidAmount: number
+    pendingAmount: number
   }
   aiUsage: {
     supabaseConfigured: boolean

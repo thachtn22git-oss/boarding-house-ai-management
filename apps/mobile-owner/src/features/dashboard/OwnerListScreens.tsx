@@ -32,6 +32,7 @@ import {
   markUtilityReadingAsBilled,
   rejectFeedback,
   resolveFeedback,
+  simulateOwnerUtilityVietQRCallback,
   simulateOwnerVietQRCallback,
   updateInvoice,
   updateRoom,
@@ -156,6 +157,7 @@ const utilityStatusOptions: SelectOption[] = [
   { label: 'Draft', value: 'draft' },
   { label: 'Confirmed', value: 'confirmed' },
   { label: 'Billed', value: 'billed' },
+  { label: 'Paid', value: 'paid' },
 ]
 
 function DataListScreen<T extends { id: string }>({
@@ -503,6 +505,11 @@ export function UtilitiesScreen() {
             <Text style={styles.meta}>Billing Month: {reading.billingMonth}</Text>
             <Text style={styles.meta}>Usage: {reading.usage}</Text>
             <Text style={styles.meta}>Total Amount: {formatCurrency(reading.totalAmount)}</Text>
+            <Text style={styles.meta}>Payment Status: {reading.paymentStatus ?? (reading.status === 'paid' || reading.status === 'billed_paid' ? 'paid' : 'unpaid')}</Text>
+            <Text style={styles.meta}>Payment Method: {reading.paymentMethod ?? 'Not available'}</Text>
+            <Text style={styles.meta}>Payment Reference: {reading.paymentReference ?? 'Not available'}</Text>
+            <Text style={styles.meta}>Paid Amount: {formatCurrency(reading.paidAmount)}</Text>
+            <Text style={styles.meta}>Paid At: {formatDate(reading.paidAt)}</Text>
             <View style={styles.actions}>
               <PrimaryButton
                 label="Edit"
@@ -517,6 +524,19 @@ export function UtilitiesScreen() {
               ) : null}
               {reading.status === 'confirmed' ? (
                 <PrimaryButton label="Mark Billed" onPress={() => void markUtilityReadingAsBilled(reading.id).then(reload)} />
+              ) : null}
+              {__DEV__ && (reading.paymentStatus ?? (reading.status === 'paid' || reading.status === 'billed_paid' ? 'paid' : 'unpaid')) !== 'paid' ? (
+                <PrimaryButton
+                  label="Simulate VietQR Callback"
+                  onPress={() => {
+                    const room = rooms.find((item) => item.id === reading.roomId)
+                    const tenant = reading.tenantId ? tenants.find((item) => item.id === reading.tenantId) : undefined
+                    void simulateOwnerUtilityVietQRCallback(reading, tenant?.fullName ?? 'Tenant', room?.roomNumber)
+                      .then(reload)
+                      .then(() => Alert.alert('Demo VietQR', 'Demo VietQR utility callback processed successfully.'))
+                  }}
+                  variant="secondary"
+                />
               ) : null}
               <PrimaryButton
                 label="Delete"

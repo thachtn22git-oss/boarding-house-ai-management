@@ -565,7 +565,7 @@ function AnalyticsPage() {
       <div className="analytics-grid">
         <AnalyticsChartCard
           title="Utility Analytics"
-          description={`Average electricity: ${percentFormatter.format(data.utilities.averageElectricityUsage)} units. Average water: ${percentFormatter.format(data.utilities.averageWaterUsage)} units.`}
+          description={`Average electricity: ${percentFormatter.format(data.utilities.averageElectricityUsage)} units. Average water: ${percentFormatter.format(data.utilities.averageWaterUsage)} units. Paid: ${currencyFormatter.format(data.utilities.paidAmount)}. Pending: ${currencyFormatter.format(data.utilities.pendingAmount)}.`}
         >
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={data.utilities.trend}>

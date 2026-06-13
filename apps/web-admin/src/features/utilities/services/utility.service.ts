@@ -13,11 +13,15 @@ import {
 } from 'firebase/firestore'
 
 import { db } from '../../../config/firebase'
+import { generateVietQRUrlForUtility } from '../../../utils/demo-payment'
 import { createNotification } from '../../notifications/services/notification.service'
 import { getUserUidByEmail } from '../../notifications/services/user-resolution.service'
 import type {
   UtilityReading,
   UtilityReadingFormValues,
+  UtilityPaymentMethod,
+  UtilityPaymentStatus,
+  UtilityQRProvider,
   UtilityReadingStatus,
   UtilityType,
 } from '../types'
@@ -34,7 +38,37 @@ function isUtilityType(value: unknown): value is UtilityType {
 }
 
 function isUtilityReadingStatus(value: unknown): value is UtilityReadingStatus {
-  return value === 'draft' || value === 'confirmed' || value === 'billed'
+  return (
+    value === 'draft' ||
+    value === 'confirmed' ||
+    value === 'billed' ||
+    value === 'paid' ||
+    value === 'billed_paid'
+  )
+}
+
+function isUtilityPaymentStatus(value: unknown): value is UtilityPaymentStatus {
+  return value === 'unpaid' || value === 'pending' || value === 'paid' || value === 'failed'
+}
+
+function isUtilityPaymentMethod(value: unknown): value is UtilityPaymentMethod {
+  return value === 'manual' || value === 'demo_vietqr'
+}
+
+function isUtilityQRProvider(value: unknown): value is UtilityQRProvider {
+  return value === 'vietqr_demo'
+}
+
+function getFallbackPaymentStatus(status: UtilityReadingStatus): UtilityPaymentStatus {
+  if (status === 'paid' || status === 'billed_paid') {
+    return 'paid'
+  }
+
+  if (status === 'billed' || status === 'confirmed') {
+    return 'unpaid'
+  }
+
+  return 'unpaid'
 }
 
 function calculateUtility(values: {
@@ -64,6 +98,8 @@ function mapUtilityReadingDocument(
   documentId: string,
   data: Record<string, unknown>,
 ): UtilityReading {
+  const status = isUtilityReadingStatus(data.status) ? data.status : 'draft'
+
   return {
     id: documentId,
     ownerId: String(data.ownerId ?? ''),
@@ -76,11 +112,36 @@ function mapUtilityReadingDocument(
     usage: Number(data.usage ?? 0),
     unitPrice: Number(data.unitPrice ?? 0),
     totalAmount: Number(data.totalAmount ?? 0),
-    status: isUtilityReadingStatus(data.status) ? data.status : 'draft',
+    status,
+    paymentStatus: isUtilityPaymentStatus(data.paymentStatus)
+      ? data.paymentStatus
+      : getFallbackPaymentStatus(status),
+    paymentMethod: isUtilityPaymentMethod(data.paymentMethod)
+      ? data.paymentMethod
+      : undefined,
+    paymentReference:
+      typeof data.paymentReference === 'string'
+        ? data.paymentReference
+        : null,
+    paidAt:
+      data.paidAt && typeof data.paidAt === 'object'
+        ? (data.paidAt as UtilityReading['paidAt'])
+        : null,
+    paidAmount:
+      typeof data.paidAmount === 'number' ? data.paidAmount : undefined,
+    qrProvider: isUtilityQRProvider(data.qrProvider) ? data.qrProvider : undefined,
+    qrPayload: typeof data.qrPayload === 'string' ? data.qrPayload : null,
     note: typeof data.note === 'string' ? data.note : undefined,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   }
+}
+
+export function buildDemoVietQRUtilityUrl(
+  reading: Pick<UtilityReading, 'id' | 'billingMonth' | 'totalAmount'>,
+  roomNumber?: string,
+) {
+  return generateVietQRUrlForUtility({ ...reading, roomNumber })
 }
 
 async function getTenantNotificationProfile(
@@ -276,4 +337,50 @@ export async function markUtilityReadingAsBilled(
     ...reading,
     status: 'billed',
   })
+}
+
+export async function simulateDemoVietQRUtilityPayment(
+  readingId: string,
+  tenantName: string,
+  roomNumber?: string,
+): Promise<void> {
+  const readingRef = doc(db, 'utilityReadings', readingId)
+  const readingSnapshot = await getDoc(readingRef)
+
+  if (!readingSnapshot.exists()) {
+    throw new Error('Utility reading not found.')
+  }
+
+  const reading = mapUtilityReadingDocument(
+    readingSnapshot.id,
+    readingSnapshot.data(),
+  )
+  const qrPayload = buildDemoVietQRUtilityUrl(reading, roomNumber)
+
+  await updateDoc(readingRef, {
+    paymentStatus: 'paid',
+    paymentMethod: 'demo_vietqr',
+    paymentReference: `DEMO-VIETQR-UTILITY-${Date.now()}`,
+    paidAmount: reading.totalAmount,
+    paidAt: serverTimestamp(),
+    qrProvider: 'vietqr_demo',
+    qrPayload,
+    status: 'paid',
+    updatedAt: serverTimestamp(),
+  })
+
+  try {
+    await createNotification({
+      userId: reading.ownerId,
+      role: 'owner',
+      type: 'utility',
+      priority: 'medium',
+      title: 'Utility Bill Paid',
+      message: `${tenantName} completed demo VietQR payment for ${reading.utilityType} utility bill.`,
+      read: false,
+      actionUrl: '/owner/utilities',
+    })
+  } catch (notificationError) {
+    console.warn('Owner utility payment notification failed.', notificationError)
+  }
 }

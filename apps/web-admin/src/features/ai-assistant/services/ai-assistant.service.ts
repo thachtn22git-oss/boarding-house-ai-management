@@ -14,6 +14,7 @@ import {
 
 import { db } from '../../../config/firebase'
 import { getRecommendationFromData } from '../../feedbacks/feedback.recommendation-rules'
+import { formatVndAmount } from '../../../utils/demo-payment'
 import { formatCurrency } from '../../../utils/format'
 
 export type AssistantIntent =
@@ -619,8 +620,22 @@ async function answerUtilitySummary(ownerId: string) {
     (sum, reading) => sum + Number(reading.data.totalAmount ?? 0),
     0,
   )
+  const paidAmount = currentMonthReadings
+    .filter((reading) => reading.data.paymentStatus === 'paid' || reading.data.status === 'paid')
+    .reduce(
+      (sum, reading) =>
+        sum + Number(reading.data.paidAmount ?? reading.data.totalAmount ?? 0),
+      0,
+    )
+  const unpaidReadings = currentMonthReadings.filter(
+    (reading) => reading.data.paymentStatus !== 'paid' && reading.data.status !== 'paid',
+  )
+  const unpaidAmount = unpaidReadings.reduce(
+    (sum, reading) => sum + Number(reading.data.totalAmount ?? 0),
+    0,
+  )
 
-  return `This month, electricity usage is ${electricityUsage} unit(s), water usage is ${waterUsage} unit(s), and total utility charges are ${formatCurrency(totalCost)}.`
+  return `This month, electricity usage is ${electricityUsage} unit(s), water usage is ${waterUsage} unit(s). Total utility charges are ${formatVndAmount(totalCost)}. Paid amount is ${formatVndAmount(paidAmount)} and unpaid amount is ${formatVndAmount(unpaidAmount)} across ${unpaidReadings.length} unpaid utility bill(s).`
 }
 
 async function answerTenantCount(ownerId: string) {

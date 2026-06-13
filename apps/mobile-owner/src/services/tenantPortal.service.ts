@@ -1,6 +1,6 @@
 import { addDoc, collection, doc, getDoc, getDocs, limit, query, serverTimestamp, updateDoc, where } from 'firebase/firestore'
 import { db } from '../config/firebase'
-import { generateVietQRUrl } from '../utils/demo-payment'
+import { generateVietQRUrl, generateVietQRUrlForUtility } from '../utils/demo-payment'
 import type {
   Contract,
   Feedback,
@@ -209,6 +209,41 @@ export async function simulateTenantInvoiceDemoPayment(
     })
   } catch (notificationError) {
     console.warn('Owner invoice payment notification failed.', notificationError)
+  }
+}
+
+export async function simulateTenantUtilityDemoPayment(
+  reading: UtilityReading,
+  tenantName: string,
+  roomNumber?: string,
+) {
+  await updateDoc(doc(db, 'utilityReadings', reading.id), {
+    paymentStatus: 'paid',
+    paymentMethod: 'demo_vietqr',
+    paymentReference: `DEMO-VIETQR-UTILITY-${Date.now()}`,
+    paidAmount: reading.totalAmount ?? 0,
+    paidAt: serverTimestamp(),
+    qrProvider: 'vietqr_demo',
+    qrPayload: generateVietQRUrlForUtility({ ...reading, roomNumber }),
+    status: 'paid',
+    updatedAt: serverTimestamp(),
+  })
+
+  try {
+    await addDoc(collection(db, 'notifications'), {
+      userId: reading.ownerId,
+      role: 'owner',
+      type: 'utility',
+      priority: 'medium',
+      title: 'Utility Bill Paid',
+      message: `${tenantName} completed demo VietQR payment for ${reading.utilityType} utility bill.`,
+      read: false,
+      actionUrl: '/owner/utilities',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  } catch (notificationError) {
+    console.warn('Owner utility payment notification failed.', notificationError)
   }
 }
 
