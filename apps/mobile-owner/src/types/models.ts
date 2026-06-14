@@ -26,6 +26,36 @@ export interface FeedbackAIConfidence {
   priority?: number
 }
 
+export interface UtilityReadingOCRMetadata {
+  used: boolean
+  templateId?: string
+  meterType: UtilityType
+  detectedReading: number | null
+  finalReading?: number | null
+  confidence: number | null
+  rawText: string | null
+  roiUsed?: boolean
+  imageName?: string
+  verifiedByOwner: boolean
+  createdAt?: unknown
+}
+
+export interface OCRNormalizedRoi {
+  xRatio: number
+  yRatio: number
+  widthRatio: number
+  heightRatio: number
+}
+
+export interface OCRMeterTemplate {
+  id: string
+  ownerId: string
+  meterType: UtilityType
+  name: string
+  sampleCount: number
+  normalizedRoi: OCRNormalizedRoi
+}
+
 export interface Room {
   id: string
   ownerId: string
@@ -88,6 +118,7 @@ export interface Invoice {
   paidAt?: unknown
   qrProvider?: QRProvider
   qrPayload?: string | null
+  ocr?: UtilityReadingOCRMetadata | null
   note?: string
 }
 
@@ -119,6 +150,7 @@ export interface UtilityReading {
   paidAmount?: number
   qrProvider?: QRProvider
   qrPayload?: string | null
+  ocr?: UtilityReadingOCRMetadata | null
   note?: string
 }
 
@@ -195,4 +227,5 @@ export interface UtilityReadingFormValues {
   unitPrice: number
   status: UtilityReadingStatus
   note?: string
+  ocr?: UtilityReadingOCRMetadata
 }

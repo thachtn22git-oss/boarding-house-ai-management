@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as Clipboard from 'expo-clipboard'
-import { Alert, Modal, ScrollView, StyleSheet, Text, View } from 'react-native'
+import * as ImagePicker from 'expo-image-picker'
+import { Alert, Image, Modal, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../providers/AuthProvider'
 import { Screen } from '../../components/common/Screen'
 import { ListCard } from '../../components/cards/ListCard'
@@ -23,6 +24,7 @@ import {
   getContracts,
   getFeedback,
   getInvoices,
+  getOCRMeterTemplates,
   getRooms,
   getTenants,
   getTenantsWithRooms,
@@ -45,6 +47,7 @@ import {
   updateTenant,
   updateUtilityReading,
 } from '../../services/ownerData.service'
+import { detectMeterReadingFromImage, type MeterReadingOCRResult } from '../../services/ocr.service'
 import type {
   Contract,
   Feedback,
@@ -52,6 +55,7 @@ import type {
   InvoiceFormValues,
   InvoiceItem,
   InvoiceStatus,
+  OCRMeterTemplate,
   Room,
   RoomFormValues,
   RoomStatus,
@@ -563,6 +567,11 @@ export function UtilitiesScreen() {
             <Text style={styles.meta}>Payment Reference: {reading.paymentReference ?? 'Not available'}</Text>
             <Text style={styles.meta}>Paid Amount: {formatCurrency(reading.paidAmount)}</Text>
             <Text style={styles.meta}>Paid At: {formatDate(reading.paidAt)}</Text>
+            {reading.ocr?.used ? (
+              <Text style={styles.meta}>
+                OCR: detected {reading.ocr.detectedReading ?? 'Not available'}, final {reading.currentReading}
+              </Text>
+            ) : null}
             <View style={styles.actions}>
               <PrimaryButton
                 label="Edit"
@@ -879,14 +888,117 @@ function UtilityFormModal({
 }: BaseModalProps & { reading: UtilityReading | null; rooms: Room[]; tenants: Tenant[] }) {
   const [values, setValues] = useState<UtilityReadingFormValues>(getInitialUtilityValues(reading, rooms))
   const [saving, setSaving] = useState(false)
+  const [ocrImage, setOcrImage] = useState<{ uri: string; name: string } | null>(null)
+  const [ocrResult, setOcrResult] = useState<MeterReadingOCRResult | null>(null)
+  const [ocrTemplates, setOcrTemplates] = useState<OCRMeterTemplate[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState(reading?.ocr?.templateId ?? '')
+  const [detecting, setDetecting] = useState(false)
   const roomOptions = rooms.map((room) => ({ label: `${room.roomNumber} - ${room.roomType}`, value: room.id }))
   const tenantOptions = [{ label: 'No tenant', value: '' }, ...tenants.map((tenant) => ({ label: tenant.fullName, value: tenant.id }))]
+  const templateOptions = [
+    { label: 'Select a trained template', value: '' },
+    ...ocrTemplates
+      .filter((template) => template.meterType === values.utilityType)
+      .map((template) => ({
+        label: `${template.name} (${template.sampleCount} samples)`,
+        value: template.id,
+      })),
+  ]
+  const selectedTemplate = ocrTemplates.find((template) => template.id === selectedTemplateId) ?? null
   const usage = Math.max(0, values.currentReading - values.previousReading)
   const totalAmount = usage * values.unitPrice
 
   useEffect(() => {
     setValues(getInitialUtilityValues(reading, rooms))
+    setOcrImage(null)
+    setSelectedTemplateId(reading?.ocr?.templateId ?? '')
+    setOcrResult(
+      reading?.ocr
+        ? {
+            meter_type: reading.ocr.meterType,
+            raw_text: reading.ocr.rawText ?? '',
+            detected_reading: reading.ocr.detectedReading ?? 0,
+            confidence: reading.ocr.confidence ?? 0,
+            roi_used: Boolean(reading.ocr.roiUsed),
+            message: 'Please verify the detected reading before saving.',
+          }
+        : null,
+    )
   }, [reading, rooms, visible])
+
+  useEffect(() => {
+    if (!visible || !ownerId) return
+
+    getOCRMeterTemplates(ownerId)
+      .then(setOcrTemplates)
+      .catch((error) => {
+        console.warn('Mobile OCR templates load failed.', error)
+        setOcrTemplates([])
+      })
+  }, [ownerId, visible])
+
+  async function pickImage(fromCamera = false) {
+    const permission = fromCamera
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync()
+
+    if (!permission.granted) {
+      Alert.alert('Permission Required', 'Image access is required to use meter OCR.')
+      return
+    }
+
+    const result = fromCamera
+      ? await ImagePicker.launchCameraAsync({
+          allowsEditing: false,
+          quality: 0.8,
+        })
+      : await ImagePicker.launchImageLibraryAsync({
+          allowsEditing: false,
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.8,
+        })
+
+    if (result.canceled || !result.assets[0]) return
+
+    const asset = result.assets[0]
+    const fallbackName = `meter-${Date.now()}.jpg`
+    setOcrImage({
+      uri: asset.uri,
+      name: asset.fileName ?? fallbackName,
+    })
+  }
+
+  async function detectReading() {
+    if (!ocrImage) {
+      Alert.alert('Meter OCR', 'Please select or take a meter image first.')
+      return
+    }
+
+    if (!selectedTemplate) {
+      Alert.alert('Meter OCR', 'Please select a trained OCR template first.')
+      return
+    }
+
+    setDetecting(true)
+    try {
+      const result = await detectMeterReadingFromImage(ocrImage.uri, ocrImage.name, values.utilityType, selectedTemplate)
+      setOcrResult(result)
+      setValues((current) => ({
+        ...current,
+        currentReading: result.detected_reading,
+        utilityType: result.meter_type,
+      }))
+      Alert.alert('Meter OCR', 'Reading detected. Please verify the value before saving.')
+    } catch (error) {
+      console.warn('Mobile meter OCR failed.', error)
+      Alert.alert(
+        'OCR Unavailable',
+        'OCR service is unavailable. Please enter the reading manually. On a physical phone, use your computer LAN IP in EXPO_PUBLIC_AI_SERVER_URL.',
+      )
+    } finally {
+      setDetecting(false)
+    }
+  }
 
   async function save() {
     if (!ownerId) return
@@ -898,8 +1010,26 @@ function UtilityFormModal({
 
     setSaving(true)
     try {
-      if (reading) await updateUtilityReading(reading.id, values)
-      else await createUtilityReading(ownerId, values)
+      const valuesWithOCR: UtilityReadingFormValues = {
+        ...values,
+        ocr: ocrResult
+          ? {
+              used: true,
+              templateId: selectedTemplate?.id ?? reading?.ocr?.templateId,
+              meterType: ocrResult.meter_type,
+              detectedReading: ocrResult.detected_reading,
+              finalReading: values.currentReading,
+              confidence: ocrResult.confidence,
+              rawText: ocrResult.raw_text,
+              roiUsed: ocrResult.roi_used,
+              imageName: ocrImage?.name ?? reading?.ocr?.imageName,
+              verifiedByOwner: true,
+            }
+          : undefined,
+      }
+
+      if (reading) await updateUtilityReading(reading.id, valuesWithOCR)
+      else await createUtilityReading(ownerId, valuesWithOCR)
       Alert.alert('Success', reading ? 'Reading updated.' : 'Reading created.')
       onSaved()
     } catch (error) {
@@ -914,8 +1044,40 @@ function UtilityFormModal({
     <FormModal title={reading ? 'Update Reading' : 'Create Reading'} visible={visible} onClose={onClose}>
       <FormSelect label="Room" options={roomOptions} value={values.roomId} onChange={(roomId) => setValues({ ...values, roomId })} />
       <FormSelect label="Tenant" options={tenantOptions} value={values.tenantId ?? ''} onChange={(tenantId) => setValues({ ...values, tenantId })} />
-      <FormSelect label="Utility type" options={utilityTypeOptions} value={values.utilityType} onChange={(utilityType) => setValues({ ...values, utilityType: utilityType as UtilityType })} />
+      <FormSelect
+        label="Utility type"
+        options={utilityTypeOptions}
+        value={values.utilityType}
+        onChange={(utilityType) => {
+          setValues({ ...values, utilityType: utilityType as UtilityType })
+          setSelectedTemplateId('')
+        }}
+      />
       <FormInput label="Billing month" value={values.billingMonth} onChangeText={(billingMonth) => setValues({ ...values, billingMonth })} placeholder="YYYY-MM" />
+      <View style={styles.ocrBox}>
+        <Text style={styles.sectionTitle}>Meter OCR</Text>
+        <Text style={styles.meta}>OCR suggests the meter reading. Please verify the value before saving.</Text>
+        <Text style={styles.meta}>For a physical phone, set EXPO_PUBLIC_AI_SERVER_URL to your computer LAN IP, for example http://192.168.x.x:8000.</Text>
+        <FormSelect label="OCR template" options={templateOptions} value={selectedTemplateId} onChange={setSelectedTemplateId} />
+        {!templateOptions.some((option) => option.value) ? (
+          <Text style={styles.error}>No trained template is available for this meter type. Create one in the web OCR Lab.</Text>
+        ) : null}
+        <View style={styles.actions}>
+          <PrimaryButton label="Pick Image" onPress={() => void pickImage(false)} variant="secondary" />
+          <PrimaryButton label="Take Photo" onPress={() => void pickImage(true)} variant="secondary" />
+          <PrimaryButton disabled={!ocrImage || detecting} label={detecting ? 'Detecting...' : 'Detect Reading'} onPress={() => void detectReading()} />
+        </View>
+        {ocrImage ? <Image source={{ uri: ocrImage.uri }} style={styles.ocrImage} /> : null}
+        {ocrResult ? (
+          <View style={styles.ocrResult}>
+            <Text style={styles.itemTitle}>Detected Reading: {ocrResult.detected_reading}</Text>
+            <Text style={styles.meta}>Confidence: {Math.round(ocrResult.confidence * 100)}%</Text>
+            <Text style={styles.meta}>ROI Used: {ocrResult.roi_used ? 'Yes' : 'No'}</Text>
+            <Text style={styles.meta}>Raw OCR Text: {ocrResult.raw_text}</Text>
+            <Text style={styles.meta}>{ocrResult.message}</Text>
+          </View>
+        ) : null}
+      </View>
       <FormInput label="Previous reading" keyboardType="numeric" value={String(values.previousReading)} onChangeText={(previousReading) => setValues({ ...values, previousReading: toNumber(previousReading) })} />
       <FormInput label="Current reading" keyboardType="numeric" value={String(values.currentReading)} onChangeText={(currentReading) => setValues({ ...values, currentReading: toNumber(currentReading) })} />
       <FormInput label="Unit price" keyboardType="numeric" value={String(values.unitPrice)} onChangeText={(unitPrice) => setValues({ ...values, unitPrice: toNumber(unitPrice) })} />
@@ -1177,6 +1339,28 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     gap: spacing.md,
+    padding: spacing.md,
+  },
+  ocrBox: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md,
+  },
+  ocrImage: {
+    backgroundColor: colors.border,
+    borderRadius: 14,
+    height: 180,
+    width: '100%',
+  },
+  ocrResult: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: spacing.sm,
     padding: spacing.md,
   },
 })

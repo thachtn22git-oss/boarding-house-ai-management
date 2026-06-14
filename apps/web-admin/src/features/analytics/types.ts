@@ -106,6 +106,11 @@ export type AnalyticsData = {
     averageWaterUsage: number
     paidAmount: number
     pendingAmount: number
+    ocrUsage: {
+      totalOCRReadings: number
+      averageConfidence: number
+      manuallyVerifiedReadings: number
+    }
   }
   aiUsage: {
     supabaseConfigured: boolean

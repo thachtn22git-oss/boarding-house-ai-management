@@ -51,6 +51,88 @@
   align-self: stretch;
 }
 
+.utility-ocr-card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  background: #f8fafc;
+}
+
+.utility-ocr-card h3 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 16px;
+}
+
+.utility-ocr-card p {
+  margin: 6px 0 0;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.utility-ocr-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  gap: 12px;
+}
+
+.utility-ocr-preview {
+  width: min(100%, 320px);
+  max-height: 220px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  object-fit: contain;
+  background: #ffffff;
+}
+
+.utility-ocr-actions {
+  justify-content: flex-start;
+}
+
+.utility-ocr-result {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-md);
+  padding: 12px;
+  background: #eff6ff;
+}
+
+.utility-ocr-result strong {
+  color: #1d4ed8;
+}
+
+.utility-ocr-result span,
+.utility-ocr-result small {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.utility-ocr-result pre,
+.utility-ocr-raw-text {
+  max-height: 120px;
+  overflow: auto;
+  border-radius: 8px;
+  margin: 0;
+  padding: 10px;
+  color: #0f172a;
+  background: #ffffff;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.utility-ocr-badge {
+  display: inline-flex;
+  margin-left: 6px;
+  color: #1e40af;
+  background: #dbeafe;
+}
+
 .utility-type-badge--electricity {
   color: #92400e;
   background: #fef3c7;
@@ -151,7 +233,8 @@
 @media (max-width: 900px) {
   .utilities-filter-card,
   .utility-form,
-  .utility-payment-info dl {
+  .utility-payment-info dl,
+  .utility-ocr-grid {
     grid-template-columns: 1fr;
   }
 

@@ -20,6 +20,7 @@ import type {
   Invoice,
   InvoiceFormValues,
   InvoiceItem,
+  OCRMeterTemplate,
   Room,
   RoomFormValues,
   Tenant,
@@ -27,6 +28,7 @@ import type {
   TenantWithRoom,
   UtilityReading,
   UtilityReadingFormValues,
+  UtilityReadingOCRMetadata,
 } from '../types/models'
 
 export interface OwnerDashboardActivity {
@@ -240,6 +242,7 @@ export const getContracts = (ownerId: string) => getOwnedCollection<Contract>('c
 export const getInvoices = (ownerId: string) => getOwnedCollection<Invoice>('invoices', ownerId)
 export const getUtilities = (ownerId: string) => getOwnedCollection<UtilityReading>('utilityReadings', ownerId)
 export const getFeedback = (ownerId: string) => getOwnedCollection<Feedback>('feedbacks', ownerId)
+export const getOCRMeterTemplates = (ownerId: string) => getOwnedCollection<OCRMeterTemplate>('ocrMeterTemplates', ownerId)
 
 export const subscribeRooms = (
   ownerId: string,
@@ -445,6 +448,7 @@ export async function createUtilityReading(ownerId: string, values: UtilityReadi
 
   await addDoc(collection(db, 'utilityReadings'), {
     ...values,
+    ocr: normalizeUtilityOCR(values.ocr),
     ...totals,
     ownerId,
     createdAt: serverTimestamp(),
@@ -455,6 +459,7 @@ export async function createUtilityReading(ownerId: string, values: UtilityReadi
 export async function updateUtilityReading(readingId: string, values: Partial<UtilityReadingFormValues>) {
   const payload: Record<string, unknown> = {
     ...values,
+    ...(values.ocr !== undefined ? { ocr: normalizeUtilityOCR(values.ocr) } : {}),
     updatedAt: serverTimestamp(),
   }
 
@@ -467,6 +472,26 @@ export async function updateUtilityReading(readingId: string, values: Partial<Ut
   }
 
   await updateDoc(doc(db, 'utilityReadings', readingId), payload)
+}
+
+function normalizeUtilityOCR(
+  ocr: UtilityReadingFormValues['ocr'],
+): UtilityReadingOCRMetadata | null {
+  if (!ocr?.used) return null
+
+  return {
+    used: true,
+    templateId: ocr.templateId,
+    meterType: ocr.meterType,
+    detectedReading: typeof ocr.detectedReading === 'number' ? ocr.detectedReading : null,
+    finalReading: typeof ocr.finalReading === 'number' ? ocr.finalReading : null,
+    confidence: typeof ocr.confidence === 'number' ? ocr.confidence : null,
+    rawText: ocr.rawText ?? null,
+    roiUsed: Boolean(ocr.roiUsed),
+    imageName: ocr.imageName,
+    verifiedByOwner: true,
+    createdAt: serverTimestamp(),
+  }
 }
 
 export async function confirmUtilityReading(readingId: string) {

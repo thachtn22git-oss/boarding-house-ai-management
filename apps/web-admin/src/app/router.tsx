@@ -22,6 +22,7 @@ import MyInvoicesPage from '../features/tenant-portal/pages/MyInvoicesPage'
 import MyRoomPage from '../features/tenant-portal/pages/MyRoomPage'
 import MyUtilitiesPage from '../features/tenant-portal/pages/MyUtilitiesPage'
 import NotificationCenterPage from '../features/notifications/pages/NotificationCenterPage'
+import OCRLabPage from '../features/ocr-lab/pages/OCRLabPage'
 import RoutePlaceholderPage from '../pages/RoutePlaceholderPage'
 import RoomManagementPage from '../features/rooms/pages/RoomManagementPage'
 import TenantHomePage from '../features/tenant-portal/pages/TenantHomePage'
@@ -74,6 +75,10 @@ export const router = createBrowserRouter([
       {
         path: 'utilities',
         element: <UtilitiesManagementPage />,
+      },
+      {
+        path: 'ocr-lab',
+        element: <OCRLabPage />,
       },
       {
         path: 'feedback',

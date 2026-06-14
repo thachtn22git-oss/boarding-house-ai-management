@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 
 import type { Room } from '../../rooms/types'
 import type { Tenant } from '../../tenants/types'
@@ -8,12 +8,18 @@ import type {
   UtilityReadingStatus,
   UtilityType,
 } from '../types'
+import {
+  detectMeterReading,
+  type MeterReadingOCRResult,
+  type OCRMeterTemplate,
+} from '../services/ocr.service'
 
 type UtilityReadingFormModalProps = {
   reading: UtilityReading | null
   open: boolean
   rooms: Room[]
   tenants: Tenant[]
+  templates: OCRMeterTemplate[]
   submitting: boolean
   onClose: () => void
   onSubmit: (values: UtilityReadingFormValues) => Promise<void>
@@ -43,6 +49,12 @@ const defaultValues: UtilityReadingFormValues = {
   unitPrice: 0,
   status: 'draft',
   note: '',
+}
+
+type OCRState = {
+  result: MeterReadingOCRResult | null
+  imageName?: string
+  templateId?: string
 }
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
@@ -124,6 +136,7 @@ function UtilityReadingFormModal({
   open,
   rooms,
   tenants,
+  templates,
   submitting,
   onClose,
   onSubmit,
@@ -132,7 +145,70 @@ function UtilityReadingFormModal({
     getInitialValues(reading),
   )
   const [errors, setErrors] = useState<UtilityReadingFormErrors>({})
+  const [ocrFile, setOcrFile] = useState<File | null>(null)
+  const [ocrPreviewUrl, setOcrPreviewUrl] = useState('')
+  const [ocrState, setOcrState] = useState<OCRState>(() => ({
+    result: reading?.ocr
+      ? {
+          meter_type: reading.ocr.meterType,
+          raw_text: reading.ocr.rawText ?? '',
+          detected_reading: reading.ocr.detectedReading ?? 0,
+          confidence: reading.ocr.confidence ?? 0,
+          roi_used: Boolean(reading.ocr.roiUsed),
+          message: 'Please verify the detected reading before saving.',
+        }
+      : null,
+    imageName: reading?.ocr?.imageName,
+    templateId: reading?.ocr?.templateId,
+  }))
+  const [selectedTemplateId, setSelectedTemplateId] = useState(reading?.ocr?.templateId ?? '')
+  const [ocrLoading, setOcrLoading] = useState(false)
+  const [ocrError, setOcrError] = useState('')
   const calculatedValues = useMemo(() => getCalculatedValues(values), [values])
+  const filteredTemplates = useMemo(
+    () => templates.filter((template) => template.meterType === values.utilityType),
+    [templates, values.utilityType],
+  )
+  const selectedTemplate = useMemo(
+    () => filteredTemplates.find((template) => template.id === selectedTemplateId) ?? null,
+    [filteredTemplates, selectedTemplateId],
+  )
+
+  useEffect(() => {
+    if (!open) return
+
+    setValues(getInitialValues(reading))
+    setErrors({})
+    setOcrFile(null)
+    setOcrError('')
+    setSelectedTemplateId(reading?.ocr?.templateId ?? '')
+    setOcrState({
+      result: reading?.ocr
+        ? {
+            meter_type: reading.ocr.meterType,
+            raw_text: reading.ocr.rawText ?? '',
+            detected_reading: reading.ocr.detectedReading ?? 0,
+            confidence: reading.ocr.confidence ?? 0,
+            roi_used: Boolean(reading.ocr.roiUsed),
+            message: 'Please verify the detected reading before saving.',
+          }
+        : null,
+      imageName: reading?.ocr?.imageName,
+      templateId: reading?.ocr?.templateId,
+    })
+  }, [open, reading])
+
+  useEffect(() => {
+    if (!ocrFile) {
+      setOcrPreviewUrl('')
+      return undefined
+    }
+
+    const nextPreviewUrl = URL.createObjectURL(ocrFile)
+    setOcrPreviewUrl(nextPreviewUrl)
+
+    return () => URL.revokeObjectURL(nextPreviewUrl)
+  }, [ocrFile])
 
   if (!open) {
     return null
@@ -160,6 +236,20 @@ function UtilityReadingFormModal({
       ...values,
       tenantId: values.tenantId || undefined,
       note: values.note?.trim() || undefined,
+      ocr: ocrState.result
+        ? {
+            used: true,
+            meterType: ocrState.result.meter_type,
+            detectedReading: ocrState.result.detected_reading,
+            finalReading: values.currentReading,
+            confidence: ocrState.result.confidence,
+            rawText: ocrState.result.raw_text,
+            templateId: ocrState.templateId,
+            roiUsed: ocrState.result.roi_used,
+            imageName: ocrState.imageName,
+            verifiedByOwner: true,
+          }
+        : undefined,
     }
     const nextErrors = validateReading(nextValues)
 
@@ -170,6 +260,32 @@ function UtilityReadingFormModal({
     }
 
     await onSubmit(nextValues)
+  }
+
+  async function handleDetectReading() {
+    if (!ocrFile) {
+      setOcrError('Please upload a meter image first.')
+      return
+    }
+
+    if (!selectedTemplate) {
+      setOcrError('Please select a trained OCR template before detection.')
+      return
+    }
+
+    setOcrLoading(true)
+    setOcrError('')
+
+    try {
+      const result = await detectMeterReading(ocrFile, values.utilityType, selectedTemplate)
+      setOcrState({ result, imageName: ocrFile.name, templateId: selectedTemplate.id })
+      updateValue('currentReading', result.detected_reading)
+    } catch (error) {
+      console.warn('Meter OCR failed.', error)
+      setOcrError('OCR could not detect the reading. Please enter it manually.')
+    } finally {
+      setOcrLoading(false)
+    }
   }
 
   return (
@@ -241,9 +357,10 @@ function UtilityReadingFormModal({
               value={values.utilityType}
               disabled={submitting}
               aria-invalid={Boolean(errors.utilityType)}
-              onChange={(event) =>
+              onChange={(event) => {
                 updateValue('utilityType', event.target.value as UtilityType)
-              }
+                setSelectedTemplateId('')
+              }}
             >
               {utilityTypeOptions.map((utilityType) => (
                 <option key={utilityType.value} value={utilityType.value}>
@@ -266,6 +383,110 @@ function UtilityReadingFormModal({
               <small className="field-error">{errors.billingMonth}</small>
             ) : null}
           </label>
+
+          <section className="utility-ocr-card room-form-field--full">
+            <div>
+              <h3>Meter OCR</h3>
+              <p>
+                OCR is used to suggest the meter reading. Please verify the value
+                before saving.
+              </p>
+            </div>
+
+            <div className="utility-ocr-grid">
+              <label className="room-form-field">
+                <span>Upload meter image</span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg"
+                  disabled={submitting || ocrLoading}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null
+                    setOcrFile(file)
+                    setOcrError('')
+                    if (file) {
+                      setOcrState((current) => ({ ...current, imageName: file.name }))
+                    }
+                  }}
+                />
+              </label>
+
+              <label className="room-form-field">
+                <span>Meter type</span>
+                <select
+                  value={values.utilityType}
+                  disabled={submitting || ocrLoading}
+                  onChange={(event) => {
+                    updateValue('utilityType', event.target.value as UtilityType)
+                    setSelectedTemplateId('')
+                  }}
+                >
+                  {utilityTypeOptions.map((utilityType) => (
+                    <option key={utilityType.value} value={utilityType.value}>
+                      {utilityType.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="room-form-field">
+                <span>OCR template</span>
+                <select
+                  value={selectedTemplateId}
+                  disabled={submitting || ocrLoading}
+                  onChange={(event) => {
+                    setSelectedTemplateId(event.target.value)
+                    setOcrError('')
+                  }}
+                >
+                  <option value="">Select a trained template</option>
+                  {filteredTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name} ({template.sampleCount} samples)
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {filteredTemplates.length === 0 ? (
+              <small className="field-error">
+                No OCR template is available for this meter type. Create one in OCR Lab.
+              </small>
+            ) : null}
+
+            {ocrPreviewUrl ? (
+              <img
+                className="utility-ocr-preview"
+                src={ocrPreviewUrl}
+                alt="Selected meter preview"
+              />
+            ) : null}
+
+            <div className="room-form-actions utility-ocr-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={submitting || ocrLoading || !ocrFile}
+                onClick={() => void handleDetectReading()}
+              >
+                {ocrLoading ? 'Detecting...' : 'Detect Reading'}
+              </button>
+            </div>
+
+            {ocrError ? <small className="field-error">{ocrError}</small> : null}
+
+            {ocrState.result ? (
+              <div className="utility-ocr-result">
+                <strong>Detected Reading: {ocrState.result.detected_reading}</strong>
+                <span>Confidence: {Math.round(ocrState.result.confidence * 100)}%</span>
+                <span>ROI Used: {ocrState.result.roi_used ? 'Yes' : 'No'}</span>
+                <span>Raw OCR Text</span>
+                <pre>{ocrState.result.raw_text}</pre>
+                <small>{ocrState.result.message}</small>
+              </div>
+            ) : null}
+          </section>
 
           <label className="room-form-field">
             <span>Previous reading</span>

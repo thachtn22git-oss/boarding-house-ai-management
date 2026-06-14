@@ -485,6 +485,14 @@ export function getUtilityAnalytics(
     (utility) => utility.data.utilityType === 'electricity',
   )
   const waterReadings = utilities.filter((utility) => utility.data.utilityType === 'water')
+  const ocrReadings = utilities.filter((utility) => {
+    const ocr = utility.data.ocr as Record<string, unknown> | undefined
+    return Boolean(ocr?.used)
+  })
+  const ocrConfidenceTotal = ocrReadings.reduce((sum, utility) => {
+    const ocr = utility.data.ocr as Record<string, unknown> | undefined
+    return sum + Number(ocr?.confidence ?? 0)
+  }, 0)
   const trend = [...monthlyGroups.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([, point]) => point)
@@ -509,6 +517,15 @@ export function getUtilityAnalytics(
       (sum, utility) => sum + Number(utility.data.totalAmount ?? 0),
       0,
     ),
+    ocrUsage: {
+      totalOCRReadings: ocrReadings.length,
+      averageConfidence:
+        ocrReadings.length > 0 ? ocrConfidenceTotal / ocrReadings.length : 0,
+      manuallyVerifiedReadings: ocrReadings.filter((utility) => {
+        const ocr = utility.data.ocr as Record<string, unknown> | undefined
+        return ocr?.verifiedByOwner === true
+      }).length,
+    },
   }
 }
 

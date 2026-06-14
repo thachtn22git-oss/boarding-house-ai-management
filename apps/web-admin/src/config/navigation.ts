@@ -7,6 +7,7 @@ export type OwnerPageKey =
   | 'contracts'
   | 'invoices'
   | 'utilities'
+  | 'ocrLab'
   | 'feedback'
   | 'notifications'
   | 'chat'
@@ -85,6 +86,14 @@ export const ownerPages: NavigationItem[] = [
     path: '/owner/utilities',
     description:
       'Record electricity and water readings, including OCR-based input.',
+    portalLabel: appLabels.ownerPortal,
+  },
+  {
+    key: 'ocrLab',
+    label: 'OCR Lab',
+    shortLabel: 'OCR',
+    path: '/owner/ocr-lab',
+    description: 'Train and test meter reading templates for utility OCR.',
     portalLabel: appLabels.ownerPortal,
   },
   {

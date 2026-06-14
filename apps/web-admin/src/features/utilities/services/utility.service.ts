@@ -25,6 +25,7 @@ import type {
   UtilityQRProvider,
   UtilityReadingStatus,
   UtilityType,
+  UtilityReadingOCRMetadata,
 } from '../types'
 
 const utilityReadingsCollection = collection(db, 'utilityReadings')
@@ -132,9 +133,36 @@ function mapUtilityReadingDocument(
       typeof data.paidAmount === 'number' ? data.paidAmount : undefined,
     qrProvider: isUtilityQRProvider(data.qrProvider) ? data.qrProvider : undefined,
     qrPayload: typeof data.qrPayload === 'string' ? data.qrPayload : null,
+    ocr:
+      data.ocr && typeof data.ocr === 'object'
+        ? (data.ocr as UtilityReadingOCRMetadata)
+        : null,
     note: typeof data.note === 'string' ? data.note : undefined,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
+  }
+}
+
+function normalizeOCRMetadata(
+  ocr: UtilityReadingFormValues['ocr'],
+): UtilityReadingOCRMetadata | null {
+  if (!ocr?.used) {
+    return null
+  }
+
+  return {
+    used: true,
+    templateId: ocr.templateId,
+    meterType: ocr.meterType,
+    detectedReading:
+      typeof ocr.detectedReading === 'number' ? ocr.detectedReading : null,
+    finalReading: typeof ocr.finalReading === 'number' ? ocr.finalReading : null,
+    confidence: typeof ocr.confidence === 'number' ? ocr.confidence : null,
+    rawText: ocr.rawText ?? null,
+    roiUsed: Boolean(ocr.roiUsed),
+    imageName: ocr.imageName,
+    verifiedByOwner: true,
+    createdAt: serverTimestamp(),
   }
 }
 
@@ -341,10 +369,12 @@ export async function createUtilityReading(
   values: UtilityReadingFormValues,
 ): Promise<string> {
   const calculatedValues = calculateUtility(values)
+  const ocr = normalizeOCRMetadata(values.ocr)
   const readingRef = await addDoc(utilityReadingsCollection, {
     ...values,
     tenantId: values.tenantId || null,
     note: values.note || null,
+    ocr,
     ownerId,
     ...calculatedValues,
     createdAt: serverTimestamp(),
@@ -374,11 +404,13 @@ export async function updateUtilityReading(
     ...values,
   }
   const calculatedValues = calculateUtility(mergedValues)
+  const ocr = values.ocr !== undefined ? normalizeOCRMetadata(values.ocr) : currentReading.ocr ?? null
 
   await updateDoc(readingRef, {
     ...values,
     tenantId: values.tenantId || null,
     note: values.note || null,
+    ocr,
     ...calculatedValues,
     updatedAt: serverTimestamp(),
   })

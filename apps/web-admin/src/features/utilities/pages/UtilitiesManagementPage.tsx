@@ -9,6 +9,10 @@ import { getTenantsByOwner, subscribeOwnerTenants } from '../../tenants/services
 import type { Tenant } from '../../tenants/types'
 import UtilityReadingFormModal from '../components/UtilityReadingFormModal'
 import {
+  getOCRMeterTemplates,
+  type OCRMeterTemplate,
+} from '../services/ocr.service'
+import {
   confirmUtilityReading,
   createUtilityReading,
   deleteUtilityReading,
@@ -189,6 +193,54 @@ function UtilityViewModal({
               </div>
             </dl>
           </div>
+
+          {reading.ocr?.used ? (
+            <div className="utility-payment-info">
+              <h3>OCR Information</h3>
+              <dl>
+                <div>
+                  <dt>Used OCR</dt>
+                  <dd>Yes</dd>
+                </div>
+                <div>
+                  <dt>Template ID</dt>
+                  <dd>{reading.ocr.templateId ?? '-'}</dd>
+                </div>
+                <div>
+                  <dt>Detected reading</dt>
+                  <dd>{reading.ocr.detectedReading ?? '-'}</dd>
+                </div>
+                <div>
+                  <dt>Final reading</dt>
+                  <dd>{reading.ocr.finalReading ?? reading.currentReading}</dd>
+                </div>
+                <div>
+                  <dt>ROI used</dt>
+                  <dd>{reading.ocr.roiUsed ? 'Yes' : 'No'}</dd>
+                </div>
+                <div>
+                  <dt>Confidence</dt>
+                  <dd>
+                    {typeof reading.ocr.confidence === 'number'
+                      ? `${Math.round(reading.ocr.confidence * 100)}%`
+                      : '-'}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Verified by owner</dt>
+                  <dd>{reading.ocr.verifiedByOwner ? 'Yes' : 'No'}</dd>
+                </div>
+                <div>
+                  <dt>Image name</dt>
+                  <dd>{reading.ocr.imageName ?? '-'}</dd>
+                </div>
+              </dl>
+              <div>
+                <dt>Raw text</dt>
+                <dd className="utility-ocr-raw-text">{reading.ocr.rawText ?? '-'}</dd>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="room-form-actions">
@@ -216,6 +268,7 @@ function UtilitiesManagementPage() {
   const [readings, setReadings] = useState<UtilityReading[]>([])
   const [rooms, setRooms] = useState<Room[]>([])
   const [tenants, setTenants] = useState<Tenant[]>([])
+  const [ocrTemplates, setOcrTemplates] = useState<OCRMeterTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -295,10 +348,11 @@ function UtilitiesManagementPage() {
     setError(null)
 
     try {
-      const [nextReadings, nextRooms, nextTenants] = await Promise.all([
+      const [nextReadings, nextRooms, nextTenants, nextTemplates] = await Promise.all([
         getUtilityReadingsByOwner(currentUser.uid),
         getRoomsByOwner(currentUser.uid),
         getTenantsByOwner(currentUser.uid),
+        getOCRMeterTemplates(currentUser.uid),
       ])
 
       setReadings(
@@ -307,6 +361,9 @@ function UtilitiesManagementPage() {
       setRooms(nextRooms.filter((room) => room.ownerId === currentUser.uid))
       setTenants(
         nextTenants.filter((tenant) => tenant.ownerId === currentUser.uid),
+      )
+      setOcrTemplates(
+        nextTemplates.filter((template) => template.ownerId === currentUser.uid),
       )
     } catch {
       setError('Unable to load utility readings. Please try again.')
@@ -333,6 +390,15 @@ function UtilitiesManagementPage() {
 
     setLoading(true)
     setError(null)
+    void getOCRMeterTemplates(currentUser.uid)
+      .then((nextTemplates) =>
+        setOcrTemplates(
+          nextTemplates.filter((template) => template.ownerId === currentUser.uid),
+        ),
+      )
+      .catch((templateError) => {
+        console.warn('Unable to load OCR templates for utilities.', templateError)
+      })
 
     const unsubscribeReadings = subscribeOwnerUtilityReadings(
       currentUser.uid,
@@ -489,14 +555,6 @@ function UtilitiesManagementPage() {
     <div className="room-management-page">
       <div className="room-page-actions utilities-actions">
         <button
-          className="secondary-button"
-          type="button"
-          disabled
-          title="OCR coming soon"
-        >
-          OCR coming soon
-        </button>
-        <button
           className="primary-button"
           type="button"
           onClick={openCreateModal}
@@ -641,6 +699,9 @@ function UtilitiesManagementPage() {
                         >
                           {getStatusLabel(displayStatus)}
                         </span>
+                        {reading.ocr?.used ? (
+                          <span className="status-badge utility-ocr-badge">OCR</span>
+                        ) : null}
                         {displayStatus === 'paid' && reading.paidAt ? (
                           <span className="tenant-paid-date">
                             Paid {formatPaymentDate(reading.paidAt)}
@@ -706,6 +767,7 @@ function UtilitiesManagementPage() {
           open={modalOpen}
           rooms={ownerRooms}
           tenants={ownerTenants}
+          templates={ocrTemplates}
           submitting={submitting}
           onClose={() => {
             if (!submitting) {

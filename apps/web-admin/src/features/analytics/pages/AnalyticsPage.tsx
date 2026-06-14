@@ -563,6 +563,29 @@ function AnalyticsPage() {
       </div>
 
       <div className="analytics-grid">
+        <DashboardSection
+          title="OCR Usage"
+          description="Meter reading OCR usage across utility readings."
+        >
+          <div className="stats-grid">
+            <StatCard
+              label="Total OCR-assisted Readings"
+              value={String(data.utilities.ocrUsage.totalOCRReadings)}
+              tone="primary"
+            />
+            <StatCard
+              label="Average OCR Confidence"
+              value={`${percentFormatter.format(data.utilities.ocrUsage.averageConfidence * 100)}%`}
+              tone="success"
+            />
+            <StatCard
+              label="Manually Verified Readings"
+              value={String(data.utilities.ocrUsage.manuallyVerifiedReadings)}
+              tone="warning"
+            />
+          </div>
+        </DashboardSection>
+
         <AnalyticsChartCard
           title="Utility Analytics"
           description={`Average electricity: ${percentFormatter.format(data.utilities.averageElectricityUsage)} units. Average water: ${percentFormatter.format(data.utilities.averageWaterUsage)} units. Paid: ${currencyFormatter.format(data.utilities.paidAmount)}. Pending: ${currencyFormatter.format(data.utilities.pendingAmount)}.`}

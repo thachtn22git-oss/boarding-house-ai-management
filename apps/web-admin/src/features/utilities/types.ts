@@ -7,6 +7,20 @@ export type UtilityPaymentStatus = 'unpaid' | 'pending' | 'paid' | 'failed'
 export type UtilityPaymentMethod = 'manual' | 'demo_vietqr'
 export type UtilityQRProvider = 'vietqr_demo'
 
+export interface UtilityReadingOCRMetadata {
+  used: boolean
+  templateId?: string
+  meterType: UtilityType
+  detectedReading: number | null
+  finalReading?: number | null
+  confidence: number | null
+  rawText: string | null
+  roiUsed?: boolean
+  imageName?: string
+  verifiedByOwner: boolean
+  createdAt?: unknown
+}
+
 export interface UtilityReading {
   id: string
   ownerId: string
@@ -27,6 +41,7 @@ export interface UtilityReading {
   paidAmount?: number
   qrProvider?: UtilityQRProvider
   qrPayload?: string | null
+  ocr?: UtilityReadingOCRMetadata | null
   note?: string
   createdAt?: unknown
   updatedAt?: unknown
@@ -42,4 +57,5 @@ export interface UtilityReadingFormValues {
   unitPrice: number
   status: UtilityReadingStatus
   note?: string
+  ocr?: UtilityReadingOCRMetadata
 }

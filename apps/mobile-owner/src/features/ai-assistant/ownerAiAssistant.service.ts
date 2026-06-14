@@ -23,6 +23,7 @@ export type AssistantIntent =
   | 'maintenance_issues'
   | 'resolution_statistics'
   | 'utility_summary'
+  | 'ocr_readings'
   | 'tenant_count'
   | 'unknown'
 
@@ -77,6 +78,7 @@ export function detectAssistantIntent(question: string): AssistantIntent {
   if (text.includes('what actions should i take') || text.includes('recommended resolutions') || text.includes('recommended actions') || text.includes('actions for tenant complaints')) return 'feedback_actions'
   if (text.includes('common maintenance issues') || text.includes('most common maintenance issues') || text.includes('maintenance complaints')) return 'maintenance_issues'
   if (text.includes('resolution statistics') || text.includes('resolution stats') || text.includes('summarize ai resolution')) return 'resolution_statistics'
+  if (text.includes('used ocr') || text.includes('ocr detected') || text.includes('ocr reading') || text.includes('ocr readings') || text.includes('manually corrected')) return 'ocr_readings'
   if (text.includes('electricity usage') || text.includes('water usage') || text.includes('utility cost') || text.includes('utility summary')) return 'utility_summary'
   if (text.includes('how many tenants') || text.includes('tenant count') || text.includes('active tenants')) return 'tenant_count'
 
@@ -189,6 +191,7 @@ function getConversationTitle(intent: AssistantIntent, question: string) {
   if (intent === 'expiring_contracts') return 'Expiring Contracts'
   if (intent === 'urgent_feedback') return 'Feedback Review'
   if (intent === 'utility_summary') return 'Utility Summary'
+  if (intent === 'ocr_readings') return 'OCR Readings'
   if (intent === 'tenant_count') return 'Tenant Overview'
 
   return 'New Conversation'
@@ -266,6 +269,41 @@ async function generateOwnerAnswer(ownerId: string, intent: AssistantIntent) {
     const unpaidReadings = readings.filter((reading) => reading.data.paymentStatus !== 'paid' && reading.data.status !== 'paid')
     const unpaid = unpaidReadings.reduce((sum, reading) => sum + Number(reading.data.totalAmount ?? 0), 0)
     answer = `This month, electricity usage is ${electricity} unit(s), water usage is ${water} unit(s). Total utility charges are ${formatVndAmount(total)}. Paid amount is ${formatVndAmount(paid)} and unpaid amount is ${formatVndAmount(unpaid)} across ${unpaidReadings.length} unpaid utility bill(s).`
+  }
+
+  if (intent === 'ocr_readings') {
+    const readings = await getOwnerRows('utilityReadings', ownerId)
+    const ocrReadings = readings.filter((reading) => {
+      const ocr = reading.data.ocr as Record<string, unknown> | undefined
+      return Boolean(ocr?.used)
+    })
+
+    if (!ocrReadings.length) {
+      answer = 'No utility readings have used OCR yet.'
+    } else {
+      const corrected = ocrReadings.filter((reading) => {
+        const ocr = reading.data.ocr as Record<string, unknown> | undefined
+        return Number(ocr?.detectedReading ?? reading.data.currentReading) !== Number(reading.data.currentReading)
+      })
+      const confidence =
+        ocrReadings.reduce((sum, reading) => {
+          const ocr = reading.data.ocr as Record<string, unknown> | undefined
+          return sum + Number(ocr?.confidence ?? 0)
+        }, 0) / ocrReadings.length
+
+      answer = [
+        `${ocrReadings.length} utility reading(s) used OCR.`,
+        `Average OCR confidence: ${Math.round(confidence * 100)}%.`,
+        `${corrected.length} reading(s) were manually corrected after OCR detection.`,
+        'Recent OCR detected readings:',
+        list(
+          ocrReadings.slice(0, 8).map((reading) => {
+            const ocr = reading.data.ocr as Record<string, unknown> | undefined
+            return `${formatLabel(reading.data.utilityType)} ${String(reading.data.billingMonth ?? '')}: detected ${String(ocr?.detectedReading ?? '-')}, final ${String(reading.data.currentReading ?? '-')}`
+          }),
+        ),
+      ].join('\n')
+    }
   }
 
   if (intent === 'tenant_count') {
