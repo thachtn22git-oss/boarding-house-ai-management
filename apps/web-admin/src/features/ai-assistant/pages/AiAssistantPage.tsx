@@ -105,8 +105,11 @@ type ConversationMenuState = {
   left: number
 }
 
+type AssistantView = 'list' | 'chat'
+
 function AiAssistantPage() {
   const { currentUser } = useAuth()
+  const [view, setView] = useState<AssistantView>('list')
   const [conversations, setConversations] = useState<AssistantConversation[]>([])
   const [selectedConversation, setSelectedConversation] =
     useState<AssistantConversation | null>(null)
@@ -269,14 +272,44 @@ function AiAssistantPage() {
     )
   }
 
-  async function handleNewChat() {
+  function handleNewChat() {
     if (!currentUser || sending) return
 
     setActiveMenu(null)
     setError('')
-    setSelectedConversation(createLocalConversation(currentUser.uid))
+    setSelectedConversation(null)
     setMessages([])
     setQuestion('')
+    setView('chat')
+  }
+
+  function handleBackToList() {
+    setActiveMenu(null)
+    setSelectedConversation(null)
+    setMessages([])
+    setQuestion('')
+    setView('list')
+    void loadConversations()
+  }
+
+  function handleOpenConversation(conversation: AssistantConversation) {
+    if (renamingConversationId === conversation.id) return
+
+    setActiveMenu(null)
+    setSelectedConversation(conversation)
+    setView('chat')
+  }
+
+  function handleSuggestedQuestion(suggestion: string) {
+    if (view === 'list') {
+      setActiveMenu(null)
+      setSelectedConversation(null)
+      setMessages([])
+      setQuestion('')
+      setView('chat')
+    }
+
+    void submitQuestion(suggestion)
   }
 
   async function saveConversationTitle(conversation: AssistantConversation) {
@@ -335,6 +368,7 @@ function AiAssistantPage() {
     if (selectedConversation?.id === conversation.id) {
       setSelectedConversation(null)
       setMessages([])
+      setView('list')
     }
 
     if (!isSupabaseConfigured || conversation.id.startsWith('local-')) {
@@ -419,6 +453,7 @@ function AiAssistantPage() {
       }
 
       setSelectedConversation(updatedConversation)
+      setView('chat')
       setMessages((current) => [...current, safeUserMessage, safeAssistantMessage])
       setConversations((current) => {
         const withoutCurrent = current.filter((item) => item.id !== updatedConversation.id)
@@ -438,179 +473,86 @@ function AiAssistantPage() {
     ? conversations.find((conversation) => conversation.id === activeMenu.conversationId) ?? null
     : null
 
-  return (
-    <>
-    <div className="ai-assistant-page">
-      <aside className="dashboard-card ai-assistant-sidebar">
-        <div className="ai-assistant-sidebar-header">
-          <div>
-            <p className="page-eyebrow">AI Assistant</p>
-            <h2>Recent Chats</h2>
+  const conversationCards = (
+    <div className="ai-conversation-list" ref={conversationListRef}>
+      {loadingConversations ? (
+        <p className="ai-muted">Loading recent chats...</p>
+      ) : conversations.length === 0 ? (
+        <p className="ai-muted">No conversations yet. Start a new chat.</p>
+      ) : (
+        conversations.map((conversation) => (
+          <div
+            className={
+              view === 'chat' && conversation.id === selectedConversationId
+                ? 'ai-conversation-item ai-conversation-item--active'
+                : 'ai-conversation-item'
+            }
+            key={conversation.id}
+            onClick={() => handleOpenConversation(conversation)}
+          >
+            <div className="ai-conversation-copy">
+              {renamingConversationId === conversation.id ? (
+                <input
+                  autoFocus
+                  className="ai-conversation-rename-input"
+                  value={renameValue}
+                  onBlur={() => void saveConversationTitle(conversation)}
+                  onChange={(event) => setRenameValue(event.target.value)}
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      void saveConversationTitle(conversation)
+                    }
+
+                    if (event.key === 'Escape') {
+                      setRenamingConversationId(null)
+                      setRenameValue('')
+                    }
+                  }}
+                />
+              ) : (
+                <span>{conversation.title}</span>
+              )}
+              <small>{formatRelativeTime(conversation.updatedAt ?? conversation.createdAt)}</small>
+            </div>
+            <div className="ai-conversation-actions" onClick={(event) => event.stopPropagation()}>
+              <button
+                aria-label="Conversation menu"
+                className="ai-conversation-menu-button"
+                type="button"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => openConversationMenu(conversation.id, event.currentTarget)}
+              >
+                ...
+              </button>
+            </div>
           </div>
+        ))
+      )}
+    </div>
+  )
+
+  const suggestedQuestionList = (
+    <div className="ai-suggestion-panel">
+      <h3>Suggested Questions</h3>
+      <div className="ai-suggestion-list">
+        {suggestedQuestions.map((suggestion) => (
           <button
-            className="primary-button"
+            key={suggestion}
             type="button"
             disabled={sending}
-            onClick={() => void handleNewChat()}
+            onClick={() => handleSuggestedQuestion(suggestion)}
           >
-            New Chat
+            {suggestion}
           </button>
-        </div>
-
-        <div className="ai-conversation-list" ref={conversationListRef}>
-          {loadingConversations ? (
-            <p className="ai-muted">Loading recent chats...</p>
-          ) : conversations.length === 0 ? (
-            <p className="ai-muted">No conversations yet.</p>
-          ) : (
-            conversations.map((conversation) => (
-              <div
-                className={
-                  conversation.id === selectedConversationId
-                    ? 'ai-conversation-item ai-conversation-item--active'
-                    : 'ai-conversation-item'
-                }
-                key={conversation.id}
-                onClick={() => {
-                  if (renamingConversationId === conversation.id) return
-                  setActiveMenu(null)
-                  setSelectedConversation(conversation)
-                }}
-              >
-                <div className="ai-conversation-copy">
-                  {renamingConversationId === conversation.id ? (
-                    <input
-                      autoFocus
-                      className="ai-conversation-rename-input"
-                      value={renameValue}
-                      onBlur={() => void saveConversationTitle(conversation)}
-                      onChange={(event) => setRenameValue(event.target.value)}
-                      onClick={(event) => event.stopPropagation()}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault()
-                          void saveConversationTitle(conversation)
-                        }
-
-                        if (event.key === 'Escape') {
-                          setRenamingConversationId(null)
-                          setRenameValue('')
-                        }
-                      }}
-                    />
-                  ) : (
-                    <span>{conversation.title}</span>
-                  )}
-                  <small>{formatRelativeTime(conversation.updatedAt ?? conversation.createdAt)}</small>
-                </div>
-                <div className="ai-conversation-actions" onClick={(event) => event.stopPropagation()}>
-                  <button
-                    aria-label="Conversation menu"
-                    className="ai-conversation-menu-button"
-                    type="button"
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) =>
-                      openConversationMenu(conversation.id, event.currentTarget)
-                    }
-                  >
-                    ⋮
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        <div className="ai-suggestion-panel">
-          <h3>Suggested Questions</h3>
-          <div className="ai-suggestion-list">
-            {suggestedQuestions.map((suggestion) => (
-              <button
-                key={suggestion}
-                type="button"
-                disabled={sending}
-                onClick={() => void submitQuestion(suggestion)}
-              >
-                {suggestion}
-              </button>
-            ))}
-          </div>
-        </div>
-      </aside>
-
-      <section className="dashboard-card ai-assistant-chat">
-        <div className="ai-assistant-header">
-          <div>
-            <p className="page-eyebrow">Owner Portal</p>
-            <h1>{selectedConversation?.title ?? 'AI Assistant'}</h1>
-            <p>
-              {selectedConversation
-                ? 'Ask questions about rooms, tenants, invoices, contracts, utilities, and feedback.'
-                : 'Select a recent chat or start a new conversation.'}
-            </p>
-          </div>
-        </div>
-
-        {error ? <div className="room-error">{error}</div> : null}
-        {historyWarning ? <div className="room-empty-state">{historyWarning}</div> : null}
-
-        <div className="ai-message-list" ref={messageListRef}>
-          {loadingMessages ? (
-            <div className="ai-empty-state">Loading conversation...</div>
-          ) : messages.length === 0 ? (
-            <div className="ai-empty-state">
-              Select a recent chat or ask a question to start a new conversation.
-            </div>
-          ) : (
-            messages.map((message) => (
-              <article
-                className={`ai-message ai-message--${message.role}`}
-                key={message.id}
-              >
-                <div>
-                  <span>{message.role === 'user' ? 'You' : 'Assistant'}</span>
-                  <small>{formatRelativeTime(message.createdAt)}</small>
-                </div>
-                <p>{message.content}</p>
-              </article>
-            ))
-          )}
-
-          {sending ? (
-            <article className="ai-message ai-message--assistant">
-              <div>
-                <span>Assistant</span>
-              </div>
-              <p>Checking your data...</p>
-            </article>
-          ) : null}
-        </div>
-
-        <form
-          className="ai-composer"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void submitQuestion(question)
-          }}
-        >
-          <textarea
-            placeholder="Ask about revenue, invoices, rooms, utilities, or feedback..."
-            value={question}
-            onChange={(event) => setQuestion(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault()
-                void submitQuestion(question)
-              }
-            }}
-          />
-          <button className="primary-button" type="submit" disabled={!canSend}>
-            {sending ? 'Thinking...' : 'Send'}
-          </button>
-        </form>
-      </section>
+        ))}
+      </div>
     </div>
-    {activeMenu && activeMenuConversation
+  )
+
+  const actionMenuPortal =
+    activeMenu && activeMenuConversation
       ? createPortal(
           <div
             ref={actionMenuRef}
@@ -637,9 +579,129 @@ function AiAssistantPage() {
           </div>,
           document.body,
         )
-      : null}
-    </>
+      : null
+
+  const chatPanel = (
+    <section className="dashboard-card ai-assistant-chat">
+      <div className="ai-assistant-header">
+        <div>
+          <p className="page-eyebrow">Owner Portal</p>
+          <h1>{selectedConversation?.title ?? 'New Chat'}</h1>
+          <p>Ask questions about rooms, tenants, invoices, contracts, utilities, and feedback.</p>
+        </div>
+      </div>
+
+      {error ? <div className="room-error">{error}</div> : null}
+      {historyWarning ? <div className="room-empty-state">{historyWarning}</div> : null}
+
+      <div className="ai-message-list" ref={messageListRef}>
+        {loadingMessages ? (
+          <div className="ai-empty-state">Loading conversation...</div>
+        ) : messages.length === 0 ? (
+          <div className="ai-empty-state">Ask a question to start this conversation.</div>
+        ) : (
+          messages.map((message) => (
+            <article className={`ai-message ai-message--${message.role}`} key={message.id}>
+              <div>
+                <span>{message.role === 'user' ? 'You' : 'Assistant'}</span>
+                <small>{formatRelativeTime(message.createdAt)}</small>
+              </div>
+              <p>{message.content}</p>
+            </article>
+          ))
+        )}
+
+        {sending ? (
+          <article className="ai-message ai-message--assistant">
+            <div>
+              <span>Assistant</span>
+            </div>
+            <p>Checking your data...</p>
+          </article>
+        ) : null}
+      </div>
+
+      <form
+        className="ai-composer"
+        onSubmit={(event) => {
+          event.preventDefault()
+          void submitQuestion(question)
+        }}
+      >
+        <textarea
+          placeholder="Ask about revenue, invoices, rooms, utilities, or feedback..."
+          value={question}
+          onChange={(event) => setQuestion(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault()
+              void submitQuestion(question)
+            }
+          }}
+        />
+        <button className="primary-button" type="submit" disabled={!canSend}>
+          {sending ? 'Thinking...' : 'Send'}
+        </button>
+      </form>
+    </section>
   )
+
+  if (view === 'list') {
+    return (
+      <>
+        <div className="ai-assistant-page ai-assistant-page--list">
+          <section className="dashboard-card ai-assistant-list-view">
+            <div className="ai-assistant-list-header">
+              <div>
+                <p className="page-eyebrow">Owner Portal</p>
+                <h1>AI Assistant</h1>
+                <p>Ask questions about your boarding house data.</p>
+              </div>
+              <button className="primary-button" type="button" disabled={sending} onClick={handleNewChat}>
+                New Chat
+              </button>
+            </div>
+
+            {error ? <div className="room-error">{error}</div> : null}
+            {historyWarning ? <div className="room-empty-state">{historyWarning}</div> : null}
+
+            <div className="ai-assistant-list-grid">
+              <section className="ai-recent-chats-section">
+                <div>
+                  <p className="page-eyebrow">Recent Chats</p>
+                  <h2>Recent Chats</h2>
+                </div>
+                {conversationCards}
+              </section>
+
+              <section className="ai-list-suggestions-section">{suggestedQuestionList}</section>
+            </div>
+          </section>
+        </div>
+        {actionMenuPortal}
+      </>
+    )
+  }
+
+  if (view === 'chat') {
+    return (
+      <>
+        <div className="ai-assistant-page ai-assistant-page--chat">
+          <aside className="dashboard-card ai-assistant-sidebar ai-assistant-sidebar--chat">
+            <button className="secondary-button ai-back-button" type="button" onClick={handleBackToList}>
+              Back to Recent Chats
+            </button>
+            {suggestedQuestionList}
+          </aside>
+
+          {chatPanel}
+        </div>
+        {actionMenuPortal}
+      </>
+    )
+  }
+
+  return null
 }
 
 export default AiAssistantPage

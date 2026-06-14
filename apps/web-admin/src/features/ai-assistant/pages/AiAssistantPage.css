@@ -10,9 +10,88 @@
   overflow: hidden;
 }
 
+.ai-assistant-page--list {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ai-assistant-page--chat {
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+}
+
 .ai-assistant-sidebar,
 .ai-assistant-chat {
   padding: 20px;
+}
+
+.ai-assistant-list-view {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 20px;
+  overflow: hidden;
+  padding: 24px;
+}
+
+.ai-assistant-list-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 18px;
+}
+
+.ai-assistant-list-header h1,
+.ai-recent-chats-section h2 {
+  margin: 0;
+  color: var(--color-text);
+}
+
+.ai-assistant-list-header p {
+  margin: 8px 0 0;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.ai-assistant-list-grid {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: 20px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ai-recent-chats-section,
+.ai-list-suggestions-section {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ai-recent-chats-section {
+  gap: 14px;
+}
+
+.ai-assistant-page--list .ai-conversation-list {
+  max-height: none;
+  flex: 1 1 auto;
+  gap: 10px;
+}
+
+.ai-list-suggestions-section .ai-suggestion-panel {
+  margin-top: 0;
+}
+
+.ai-back-button {
+  width: 100%;
+  justify-content: center;
+}
+
+.ai-assistant-sidebar--chat {
+  justify-content: flex-start;
 }
 
 .ai-assistant-sidebar {
@@ -389,6 +468,14 @@
     grid-template-columns: 300px minmax(0, 1fr);
     gap: 16px;
   }
+
+  .ai-assistant-page--list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ai-assistant-page--chat {
+    grid-template-columns: 300px minmax(0, 1fr);
+  }
 }
 
 @media (max-height: 800px) {
@@ -452,6 +539,19 @@
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
     overflow: hidden;
+  }
+
+  .ai-assistant-page--list {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .ai-assistant-list-grid {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .ai-assistant-page--list .ai-conversation-list {
+    max-height: 280px;
   }
 
   .ai-assistant-sidebar,
