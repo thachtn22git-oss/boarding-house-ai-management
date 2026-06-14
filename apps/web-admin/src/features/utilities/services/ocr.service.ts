@@ -1,6 +1,8 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
+  doc,
   getDocs,
   orderBy,
   query,
@@ -174,6 +176,23 @@ export async function saveOCRTrainingSample(
   return sampleRef.id
 }
 
+export async function deleteOCRTrainingSample(sampleId: string): Promise<void> {
+  await deleteDoc(doc(db, 'ocrTrainingSamples', sampleId))
+}
+
+export async function deleteOCRTrainingSamplesByMeterType(
+  ownerId: string,
+  meterType: UtilityType,
+): Promise<number> {
+  const snapshot = await getDocs(
+    query(samplesCollection, where('ownerId', '==', ownerId), where('meterType', '==', meterType)),
+  )
+
+  await Promise.all(snapshot.docs.map((sampleDoc) => deleteDoc(sampleDoc.ref)))
+
+  return snapshot.size
+}
+
 export async function getOCRMeterTemplates(
   ownerId: string,
   meterType?: UtilityType,
@@ -186,6 +205,10 @@ export async function getOCRMeterTemplates(
   ).catch(() => getDocs(query(templatesCollection, ...constraints)))
 
   return sortByUpdatedAt(snapshot.docs.map((templateDoc) => mapTemplate(templateDoc.id, templateDoc.data())))
+}
+
+export async function deleteOCRMeterTemplate(templateId: string): Promise<void> {
+  await deleteDoc(doc(db, 'ocrMeterTemplates', templateId))
 }
 
 export async function generateOCRTemplate(

@@ -170,6 +170,73 @@
   background: #ffffff;
 }
 
+.ocr-table-actions {
+  gap: 8px;
+}
+
+.ocr-table-actions button {
+  min-height: 34px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.danger-button {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: #ffffff;
+  background: var(--color-danger);
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+}
+
+.danger-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(220, 38, 38, 0.18);
+}
+
+.danger-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.ocr-management-modal {
+  width: min(960px, calc(100vw - 32px));
+}
+
+.ocr-management-modal .ocr-lab-grid {
+  align-items: start;
+}
+
+.ocr-muted-text {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ocr-match-success,
+.ocr-match-danger {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.ocr-match-success {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.ocr-match-danger {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
 @media (max-width: 900px) {
   .ocr-lab-card-header,
   .ocr-lab-actions {

@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } fr
 
 import { useAuth } from '../../auth/useAuth'
 import {
+  deleteOCRMeterTemplate,
+  deleteOCRTrainingSample,
+  deleteOCRTrainingSamplesByMeterType,
   detectMeterReading,
   generateOCRTemplate,
   getOCRMeterTemplates,
@@ -61,6 +64,32 @@ function clampRoi(roi: OCRPixelRoi, imageWidth: number, imageHeight: number): OC
   return { x, y, width, height }
 }
 
+function getMeterTypeLabel(meterType: UtilityType) {
+  return meterType === 'electricity' ? 'Electricity' : 'Water'
+}
+
+function formatRoi(roi: OCRPixelRoi) {
+  return `x ${roi.x}, y ${roi.y}, w ${roi.width}, h ${roi.height}`
+}
+
+function formatTemplateRoi(template: OCRMeterTemplate) {
+  return [
+    `x ${template.normalizedRoi.xRatio.toFixed(3)}`,
+    `y ${template.normalizedRoi.yRatio.toFixed(3)}`,
+    `w ${template.normalizedRoi.widthRatio.toFixed(3)}`,
+    `h ${template.normalizedRoi.heightRatio.toFixed(3)}`,
+  ].join(', ')
+}
+
+function isExpectedMatch(result: MeterReadingOCRResult | null, expected: string) {
+  if (!result || !expected.trim()) return null
+
+  const expectedValue = Number(expected)
+  if (!Number.isFinite(expectedValue)) return null
+
+  return Math.abs(result.detected_reading - expectedValue) < 0.001
+}
+
 function OCRLabPage() {
   const { currentUser } = useAuth()
   const imageRef = useRef<HTMLImageElement | null>(null)
@@ -83,6 +112,9 @@ function OCRLabPage() {
   const [testTemplateId, setTestTemplateId] = useState('')
   const [testResult, setTestResult] = useState<MeterReadingOCRResult | null>(null)
   const [detecting, setDetecting] = useState(false)
+  const [viewingTemplate, setViewingTemplate] = useState<OCRMeterTemplate | null>(null)
+  const [testingTemplate, setTestingTemplate] = useState<OCRMeterTemplate | null>(null)
+  const [deletingId, setDeletingId] = useState('')
 
   const meterTemplates = useMemo(
     () => templates.filter((template) => template.meterType === meterType),
@@ -280,6 +312,89 @@ function OCRLabPage() {
     } finally {
       setDetecting(false)
     }
+  }
+
+  async function handleDeleteTemplate(template: OCRMeterTemplate) {
+    if (!window.confirm('Delete OCR template?\n\nThis action cannot be undone.')) {
+      return
+    }
+
+    setDeletingId(template.id)
+    setError('')
+    setSuccess('')
+
+    try {
+      await deleteOCRMeterTemplate(template.id)
+      setTemplates((current) => current.filter((item) => item.id !== template.id))
+      setSuccess('OCR template deleted.')
+      if (testTemplateId === template.id) {
+        setTestTemplateId('')
+        setTestResult(null)
+      }
+    } catch (deleteError) {
+      console.warn('OCR template delete failed.', deleteError)
+      setError('Unable to delete OCR template. Please try again.')
+    } finally {
+      setDeletingId('')
+    }
+  }
+
+  async function handleDeleteSample(sample: OCRTrainingSample) {
+    if (!window.confirm('Delete OCR training sample?\n\nThis action cannot be undone.')) {
+      return
+    }
+
+    setDeletingId(sample.id)
+    setError('')
+    setSuccess('')
+
+    try {
+      await deleteOCRTrainingSample(sample.id)
+      setSamples((current) => current.filter((item) => item.id !== sample.id))
+      setSuccess('Training sample deleted.')
+    } catch (deleteError) {
+      console.warn('OCR training sample delete failed.', deleteError)
+      setError('Unable to delete training sample. Please try again.')
+    } finally {
+      setDeletingId('')
+    }
+  }
+
+  async function handleDeleteAllSamplesForMeterType() {
+    if (!currentUser) return
+
+    const label = getMeterTypeLabel(meterType)
+    if (
+      !window.confirm(
+        `Delete all ${label} training samples?\n\nThis action cannot be undone. Generated templates will not be deleted.`,
+      )
+    ) {
+      return
+    }
+
+    setDeletingId(`samples-${meterType}`)
+    setError('')
+    setSuccess('')
+
+    try {
+      const deletedCount = await deleteOCRTrainingSamplesByMeterType(currentUser.uid, meterType)
+      setSamples((current) => current.filter((sample) => sample.meterType !== meterType))
+      setSuccess(`${deletedCount} ${label} training sample${deletedCount === 1 ? '' : 's'} deleted.`)
+    } catch (deleteError) {
+      console.warn('OCR training samples delete failed.', deleteError)
+      setError('Unable to delete training samples. Please try again.')
+    } finally {
+      setDeletingId('')
+    }
+  }
+
+  function openTemplateTest(template: OCRMeterTemplate) {
+    setMeterType(template.meterType)
+    setTestTemplateId(template.id)
+    setTestingTemplate(template)
+    setTestResult(null)
+    setSuccess('')
+    setError('')
   }
 
   const roiStyle =
@@ -557,24 +672,376 @@ function OCRLabPage() {
                   <th>Samples</th>
                   <th>ROI Ratios</th>
                   <th>Updated</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {templates.map((template) => (
                   <tr key={template.id}>
                     <td>{template.name}</td>
-                    <td>{template.meterType === 'electricity' ? 'Electricity' : 'Water'}</td>
+                    <td>{getMeterTypeLabel(template.meterType)}</td>
                     <td>{template.sampleCount}</td>
-                    <td>
-                      {template.normalizedRoi.xRatio.toFixed(3)}, {template.normalizedRoi.yRatio.toFixed(3)}, {template.normalizedRoi.widthRatio.toFixed(3)}, {template.normalizedRoi.heightRatio.toFixed(3)}
-                    </td>
+                    <td>{formatTemplateRoi(template)}</td>
                     <td>{formatTimestamp(template.updatedAt ?? template.createdAt)}</td>
+                    <td>
+                      <div className="room-table-actions ocr-table-actions">
+                        <button className="secondary-button" type="button" onClick={() => setViewingTemplate(template)}>
+                          View
+                        </button>
+                        <button className="secondary-button" type="button" onClick={() => openTemplateTest(template)}>
+                          Test
+                        </button>
+                        <button
+                          className="danger-button"
+                          type="button"
+                          disabled={deletingId === template.id}
+                          onClick={() => void handleDeleteTemplate(template)}
+                        >
+                          {deletingId === template.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
+      </section>
+
+      <section className="dashboard-card ocr-template-list">
+        <div className="ocr-lab-card-header">
+          <div>
+            <p className="page-eyebrow">Training Data</p>
+            <h2>Training Samples</h2>
+          </div>
+          <button
+            className="danger-button"
+            type="button"
+            disabled={
+              deletingId === `samples-${meterType}` ||
+              samples.filter((sample) => sample.meterType === meterType).length === 0
+            }
+            onClick={() => void handleDeleteAllSamplesForMeterType()}
+          >
+            {deletingId === `samples-${meterType}`
+              ? 'Deleting...'
+              : `Delete All ${getMeterTypeLabel(meterType)} Samples`}
+          </button>
+        </div>
+        {samples.length === 0 ? (
+          <div className="room-empty-state">
+            <h2>No training samples found.</h2>
+            <p>Upload a meter image, select an ROI, and save a verified reading.</p>
+          </div>
+        ) : (
+          <div className="room-table-wrapper">
+            <table className="room-table">
+              <thead>
+                <tr>
+                  <th>Image Name</th>
+                  <th>Meter Type</th>
+                  <th>Verified Reading</th>
+                  <th>ROI</th>
+                  <th>Created</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {samples.map((sample) => (
+                  <tr key={sample.id}>
+                    <td>{sample.imageName}</td>
+                    <td>{getMeterTypeLabel(sample.meterType)}</td>
+                    <td>{sample.labelValue}</td>
+                    <td>{formatRoi(sample.roi)}</td>
+                    <td>{formatTimestamp(sample.createdAt)}</td>
+                    <td>
+                      <div className="room-table-actions ocr-table-actions">
+                        <button
+                          className="danger-button"
+                          type="button"
+                          disabled={deletingId === sample.id}
+                          onClick={() => void handleDeleteSample(sample)}
+                        >
+                          {deletingId === sample.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {viewingTemplate ? (
+        <TemplateViewModal
+          samples={samples}
+          template={viewingTemplate}
+          onClose={() => setViewingTemplate(null)}
+          onTest={() => {
+            setViewingTemplate(null)
+            openTemplateTest(viewingTemplate)
+          }}
+        />
+      ) : null}
+
+      {testingTemplate ? (
+        <TemplateTestModal
+          template={testingTemplate}
+          onClose={() => setTestingTemplate(null)}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+function TemplateViewModal({
+  template,
+  samples,
+  onClose,
+  onTest,
+}: {
+  template: OCRMeterTemplate
+  samples: OCRTrainingSample[]
+  onClose: () => void
+  onTest: () => void
+}) {
+  const templateSamples = samples
+    .filter((sample) => sample.meterType === template.meterType)
+    .slice(0, 3)
+
+  return (
+    <div className="room-modal-backdrop" role="presentation">
+      <section
+        className="room-modal ocr-management-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ocr-template-view-title"
+      >
+        <div className="room-modal-header">
+          <div>
+            <p className="page-eyebrow">OCR Template</p>
+            <h2 id="ocr-template-view-title">{template.name}</h2>
+          </div>
+          <button className="room-modal-close" type="button" onClick={onClose} aria-label="Close template details">
+            x
+          </button>
+        </div>
+
+        <div className="contract-summary invoice-summary">
+          <dl>
+            <div>
+              <dt>Template name</dt>
+              <dd>{template.name}</dd>
+            </div>
+            <div>
+              <dt>Meter type</dt>
+              <dd>{getMeterTypeLabel(template.meterType)}</dd>
+            </div>
+            <div>
+              <dt>Sample count</dt>
+              <dd>{template.sampleCount}</dd>
+            </div>
+            <div>
+              <dt>ROI ratios</dt>
+              <dd>{formatTemplateRoi(template)}</dd>
+            </div>
+            <div>
+              <dt>Created at</dt>
+              <dd>{formatTimestamp(template.createdAt)}</dd>
+            </div>
+            <div>
+              <dt>Updated at</dt>
+              <dd>{formatTimestamp(template.updatedAt)}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <section className="ocr-lab-panel">
+          <h3>ROI Inspection</h3>
+          <p className="ocr-muted-text">
+            Training images are not stored in Firestore, so this view shows the template ROI ratios and recent sample ROI values.
+          </p>
+          {templateSamples.length === 0 ? (
+            <div className="ocr-empty-preview">No training sample metadata is available for this template type.</div>
+          ) : (
+            <div className="room-table-wrapper">
+              <table className="room-table">
+                <thead>
+                  <tr>
+                    <th>Image</th>
+                    <th>Verified Reading</th>
+                    <th>Pixel ROI</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {templateSamples.map((sample) => (
+                    <tr key={sample.id}>
+                      <td>{sample.imageName}</td>
+                      <td>{sample.labelValue}</td>
+                      <td>{formatRoi(sample.roi)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <div className="room-form-actions">
+          <button className="secondary-button" type="button" onClick={onClose}>
+            Close
+          </button>
+          <button className="primary-button" type="button" onClick={onTest}>
+            Test Template
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function TemplateTestModal({
+  template,
+  onClose,
+}: {
+  template: OCRMeterTemplate
+  onClose: () => void
+}) {
+  const [file, setFile] = useState<File | null>(null)
+  const [preview, setPreview] = useState('')
+  const [expectedReading, setExpectedReading] = useState('')
+  const [result, setResult] = useState<MeterReadingOCRResult | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!file) {
+      setPreview('')
+      return undefined
+    }
+
+    const url = URL.createObjectURL(file)
+    setPreview(url)
+
+    return () => URL.revokeObjectURL(url)
+  }, [file])
+
+  async function runTest() {
+    if (!file) {
+      setError('Please upload a test meter image first.')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setResult(null)
+
+    try {
+      const nextResult = await detectMeterReading(file, template.meterType, template)
+      setResult(nextResult)
+    } catch (testError) {
+      console.warn('OCR template modal test failed.', testError)
+      setError('OCR could not detect the reading. Please adjust the template or image.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const expectedMatch = isExpectedMatch(result, expectedReading)
+
+  return (
+    <div className="room-modal-backdrop" role="presentation">
+      <section
+        className="room-modal ocr-management-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ocr-template-test-title"
+      >
+        <div className="room-modal-header">
+          <div>
+            <p className="page-eyebrow">Test OCR Template</p>
+            <h2 id="ocr-template-test-title">{template.name}</h2>
+          </div>
+          <button className="room-modal-close" type="button" onClick={onClose} aria-label="Close OCR template test">
+            x
+          </button>
+        </div>
+
+        {error ? <div className="room-error">{error}</div> : null}
+
+        <div className="ocr-lab-grid">
+          <div className="ocr-lab-panel">
+            <label className="room-form-field">
+              <span>Test image</span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/jpg"
+                onChange={(event) => {
+                  setFile(event.target.files?.[0] ?? null)
+                  setResult(null)
+                  setError('')
+                }}
+              />
+            </label>
+            <label className="room-form-field">
+              <span>Expected reading optional</span>
+              <input
+                type="number"
+                min="0"
+                step={template.meterType === 'water' ? '0.01' : '1'}
+                value={expectedReading}
+                onChange={(event) => setExpectedReading(event.target.value)}
+                placeholder="Enter expected value"
+              />
+            </label>
+            {preview ? (
+              <img className="ocr-test-preview" src={preview} alt="Template test meter preview" />
+            ) : (
+              <div className="ocr-empty-preview">Upload a meter image to test this template.</div>
+            )}
+            <button className="primary-button" type="button" disabled={loading || !file} onClick={() => void runTest()}>
+              {loading ? 'Detecting...' : 'Run OCR Test'}
+            </button>
+          </div>
+
+          <div className="ocr-lab-panel">
+            <h3>Result</h3>
+            <p className="ocr-muted-text">ROI ratios: {formatTemplateRoi(template)}</p>
+            {result ? (
+              <div className="utility-ocr-result">
+                <strong>Detected Reading: {result.detected_reading}</strong>
+                <span>Confidence: {Math.round(result.confidence * 100)}%</span>
+                <span>ROI Used: {result.roi_used ? 'Yes' : 'No'}</span>
+                {expectedMatch !== null ? (
+                  <span className={expectedMatch ? 'ocr-match-success' : 'ocr-match-danger'}>
+                    {expectedMatch ? 'Correct result' : 'Incorrect result'}
+                  </span>
+                ) : null}
+                {result.cropped_preview_base64 ? (
+                  <img
+                    className="ocr-cropped-preview"
+                    src={`data:image/png;base64,${result.cropped_preview_base64}`}
+                    alt="Cropped OCR ROI preview"
+                  />
+                ) : null}
+                <span>Raw OCR Text</span>
+                <pre>{result.raw_text}</pre>
+                <small>{result.message}</small>
+              </div>
+            ) : (
+              <div className="ocr-empty-preview">Run OCR to inspect the crop, raw text, and detected reading.</div>
+            )}
+          </div>
+        </div>
+
+        <div className="room-form-actions">
+          <button className="secondary-button" type="button" onClick={onClose}>
+            Close
+          </button>
+        </div>
       </section>
     </div>
   )
