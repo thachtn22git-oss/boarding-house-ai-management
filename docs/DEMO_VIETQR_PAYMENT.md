@@ -42,6 +42,7 @@ The app encodes query parameters and uses the invoice code as transfer content.
 4. Tenant selects `I have completed payment (Demo)`.
 5. The app marks the invoice as paid in Firestore.
 6. The owner receives an invoice payment notification.
+7. Tenant and owner lists show a single unified `Paid` status.
 
 ## Utility Bill Demo Flow
 
@@ -52,6 +53,7 @@ The app encodes query parameters and uses the invoice code as transfer content.
 5. Tenant selects `I have completed payment (Demo)`.
 6. The app marks the utility bill as paid in Firestore.
 7. The owner receives a utility payment notification.
+8. Tenant and owner lists show a single unified `Paid` status.
 
 Invoice and utility payment flows share the same demo VietQR approach. The QR image is real and scannable, but payment confirmation is simulated inside the app.
 
@@ -88,3 +90,35 @@ When the demo utility payment is completed, the utility reading is updated with:
 Production can integrate a payment callback provider such as SePay, Casso, or a VietQR-compatible banking webhook. A real integration should verify transaction amount, transfer content, bank account, transaction ID, and payment status on a trusted backend before marking an invoice as paid.
 
 Do not collect card numbers, bank passwords, OTPs, or real banking credentials in this app.
+
+## QA Checklist
+
+Invoices:
+
+- [ ] Unpaid invoice shows `Pay with VietQR`.
+- [ ] QR image loads or a clear demo fallback appears.
+- [ ] Demo warning is visible.
+- [ ] `I have completed payment (Demo)` marks invoice paid.
+- [ ] Firestore has `paymentStatus: "paid"`.
+- [ ] `paidAmount` equals `totalAmount`.
+- [ ] Owner notification is created.
+- [ ] Tenant table shows one status column.
+- [ ] Owner table shows one status column.
+
+Utilities:
+
+- [ ] Unpaid utility bill shows `Pay with VietQR`.
+- [ ] QR image loads or a clear demo fallback appears.
+- [ ] Demo warning is visible.
+- [ ] `I have completed payment (Demo)` marks utility paid.
+- [ ] Firestore has `paymentStatus: "paid"`.
+- [ ] Firestore does not reset utility `status` to `draft`.
+- [ ] Owner notification is created.
+- [ ] Tenant table shows one status column.
+- [ ] Owner table shows one status column.
+
+Analytics and dashboard:
+
+- [ ] Owner dashboard updates after payment.
+- [ ] Revenue and utility amount calculations update.
+- [ ] Notification bell unread count updates.

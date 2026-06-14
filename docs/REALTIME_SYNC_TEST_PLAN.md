@@ -11,6 +11,18 @@ Core business data remains in Firestore and uses page-scoped `onSnapshot` listen
 
 Chat and AI Assistant history remain on Supabase.
 
+## Collections To Verify
+
+- [ ] `rooms`
+- [ ] `tenants`
+- [ ] `contracts`
+- [ ] `invoices`
+- [ ] `utilityReadings`
+- [ ] `feedbacks`
+- [ ] `notifications`
+
+Each Firestore listener must be scoped to the signed-in owner, tenant, or user. Never display data from another owner or tenant account.
+
 ## How Realtime Works
 
 Realtime listeners use simple Firestore queries such as:
@@ -30,6 +42,17 @@ If a listener fails because of rules, quota, or connectivity:
 - The page keeps existing data visible.
 - A warning is shown: `Realtime updates are unavailable. Showing latest loaded data.`
 - A one-time fetch is attempted as fallback.
+
+The warning must be cleared after a successful snapshot. Do not show a realtime warning when realtime is working.
+
+## Listener Stability Rules
+
+- Use `onSnapshot` only while the related page or screen is mounted.
+- Always return and call the unsubscribe function on unmount.
+- Do not include data arrays such as `messages`, `rooms`, or `invoices` in listener `useEffect` dependencies.
+- Do not toggle the initial loading state on every realtime event.
+- Append realtime chat messages without refetching the full message list on every insert.
+- Keep current selected records stable when list snapshots refresh.
 
 ## Manual Test Cases
 
@@ -64,8 +87,34 @@ If a listener fails because of rules, quota, or connectivity:
 2. Create or update rooms, invoices, utilities, or feedback in another session.
 3. Confirm dashboard statistics update without a manual refresh.
 
+### Mobile Owner + Web Owner
+
+1. Open mobile owner dashboard.
+2. Open web owner rooms, invoices, utilities, or feedback.
+3. Change data on web.
+4. Confirm mobile statistics and list screens update without refresh.
+5. Change data on mobile where supported.
+6. Confirm web pages update without refresh.
+
+### Tenant Payment Sync
+
+1. Open tenant invoice or utility page.
+2. Open owner invoice or utility page.
+3. Complete demo VietQR payment as tenant.
+4. Confirm tenant row shows one unified `Paid` status.
+5. Confirm owner row shows `Paid` without duplicate payment/status columns.
+6. Confirm owner notification is created and unread badge updates.
+
 ## Firestore Quota Notes
 
 - Listeners are scoped to the current screen.
 - Analytics remains fetch-based to avoid unnecessary long-lived listeners.
 - Dashboard listens to owner-scoped collections only while the dashboard route is open.
+
+## Pass Criteria
+
+- No page requires manual refresh for normal CRUD or payment updates.
+- No repeated loading flicker after the first snapshot.
+- No duplicate rows or duplicate chat messages.
+- No stale selected conversation after a room/chat list refresh.
+- No cross-owner or cross-tenant data leakage.
