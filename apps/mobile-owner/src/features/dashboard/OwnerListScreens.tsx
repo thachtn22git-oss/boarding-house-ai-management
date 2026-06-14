@@ -34,6 +34,12 @@ import {
   resolveFeedback,
   simulateOwnerUtilityVietQRCallback,
   simulateOwnerVietQRCallback,
+  subscribeContracts,
+  subscribeFeedback,
+  subscribeInvoices,
+  subscribeRooms,
+  subscribeTenantsWithRooms,
+  subscribeUtilities,
   updateInvoice,
   updateRoom,
   updateTenant,
@@ -116,12 +122,18 @@ function getFeedbackRecommendation(feedback: Feedback) {
 }
 
 type Loader<T> = (ownerId: string) => Promise<T[]>
+type Subscriber<T> = (
+  ownerId: string,
+  callback: (items: T[]) => void,
+  onError?: (error: unknown) => void,
+) => () => void
 
 interface DataListScreenProps<T> {
   title: string
   subtitle: string
   emptyMessage: string
   loader: Loader<T>
+  subscriber?: Subscriber<T>
   actionLabel?: string
   onAction?: () => void
   refreshKey?: number
@@ -165,6 +177,7 @@ function DataListScreen<T extends { id: string }>({
   subtitle,
   emptyMessage,
   loader,
+  subscriber,
   actionLabel,
   onAction,
   refreshKey,
@@ -192,8 +205,40 @@ function DataListScreen<T extends { id: string }>({
   }, [currentUser, loader, title])
 
   useEffect(() => {
+    if (!subscriber || !currentUser) {
+      void loadItems()
+      return undefined
+    }
+
+    let hasLoadedOnce = false
+    setLoading(true)
+    setError(null)
+
+    return subscriber(
+      currentUser.uid,
+      (nextItems) => {
+        setItems(nextItems)
+        setError(null)
+        if (!hasLoadedOnce) {
+          setLoading(false)
+          hasLoadedOnce = true
+        }
+      },
+      (subscriptionError) => {
+        console.warn(`${title} realtime update failed.`, subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        if (!hasLoadedOnce) {
+          setLoading(false)
+          hasLoadedOnce = true
+        }
+      },
+    )
+  }, [currentUser, loadItems, subscriber, title])
+
+  useEffect(() => {
+    if (subscriber) return
     void loadItems()
-  }, [loadItems, refreshKey])
+  }, [loadItems, refreshKey, subscriber])
 
   return (
     <Screen loading={loading} onRefresh={loadItems} refreshing={loading} subtitle={subtitle} title={title}>
@@ -221,6 +266,7 @@ export function RoomsScreen() {
         actionLabel="Add Room"
         emptyMessage="No rooms found."
         loader={getRooms}
+        subscriber={subscribeRooms}
         onAction={() => {
           setEditingRoom(null)
           setModalVisible(true)
@@ -294,6 +340,7 @@ export function TenantsScreen() {
         actionLabel="Add Tenant"
         emptyMessage="No tenants found."
         loader={getTenantsWithRooms}
+        subscriber={subscribeTenantsWithRooms}
         onAction={() => {
           setEditingTenant(null)
           setModalVisible(true)
@@ -374,6 +421,7 @@ export function InvoicesScreen() {
         actionLabel="Create Invoice"
         emptyMessage="No invoices found."
         loader={getInvoices}
+        subscriber={subscribeInvoices}
         onAction={() => {
           setEditingInvoice(null)
           setModalVisible(true)
@@ -453,6 +501,7 @@ export function ContractsScreen() {
     <DataListScreen<Contract>
       emptyMessage="No contracts found."
       loader={getContracts}
+      subscriber={subscribeContracts}
       renderItem={(contract) => (
         <View style={styles.item}>
           <Text style={styles.itemTitle}>{contract.contractCode}</Text>
@@ -491,6 +540,7 @@ export function UtilitiesScreen() {
         actionLabel="Add Reading"
         emptyMessage="No utility readings found."
         loader={getUtilities}
+        subscriber={subscribeUtilities}
         onAction={() => {
           setEditingReading(null)
           setModalVisible(true)
@@ -577,6 +627,7 @@ export function FeedbackScreen() {
     <DataListScreen<Feedback>
       emptyMessage="No feedback found."
       loader={getFeedback}
+      subscriber={subscribeFeedback}
       renderItem={(feedback, reload) => (
         <View style={styles.item}>
           <Text style={styles.itemTitle}>{feedback.title}</Text>

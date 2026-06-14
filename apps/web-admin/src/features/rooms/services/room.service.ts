@@ -4,6 +4,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
@@ -55,11 +56,77 @@ async function getRoomsFromQuery(ownerId: string, sortByCreatedAt: boolean) {
   )
 }
 
+function getTimestampValue(value: unknown) {
+  if (typeof value === 'object' && value !== null && 'toDate' in value) {
+    return (value as { toDate: () => Date }).toDate().getTime()
+  }
+
+  if (typeof value === 'string') {
+    const time = new Date(value).getTime()
+    return Number.isNaN(time) ? 0 : time
+  }
+
+  return 0
+}
+
+function sortRoomsByCreatedAt(rooms: Room[]) {
+  return [...rooms].sort(
+    (left, right) =>
+      getTimestampValue(right.createdAt) - getTimestampValue(left.createdAt),
+  )
+}
+
 export async function getRoomsByOwner(ownerId: string): Promise<Room[]> {
   try {
     return await getRoomsFromQuery(ownerId, true)
   } catch {
     return getRoomsFromQuery(ownerId, false)
+  }
+}
+
+export function subscribeOwnerRooms(
+  ownerId: string,
+  callback: (rooms: Room[]) => void,
+  onError?: (error: unknown) => void,
+): () => void {
+  const unsubscribe = onSnapshot(
+    query(roomsCollection, where('ownerId', '==', ownerId)),
+    (snapshot) => {
+      const rooms = sortRoomsByCreatedAt(
+        snapshot.docs.map((roomDoc) => mapRoomDocument(roomDoc.id, roomDoc.data())),
+      )
+      if (import.meta.env.DEV) {
+        console.debug('Owner rooms snapshot', {
+          collection: 'rooms',
+          ownerId,
+          size: rooms.length,
+        })
+      }
+      callback(rooms)
+    },
+    (error) => {
+      console.warn('Realtime rooms subscription failed.', {
+        collection: 'rooms',
+        ownerId,
+        code: 'code' in error ? error.code : undefined,
+        message: error.message,
+      })
+      void getRoomsByOwner(ownerId).then(callback).catch((fallbackError) => {
+        console.warn('Rooms fallback fetch failed.', fallbackError)
+      })
+      onError?.(error)
+    },
+  )
+
+  if (import.meta.env.DEV) {
+    console.debug('Subscribed to owner rooms')
+  }
+
+  return () => {
+    unsubscribe()
+    if (import.meta.env.DEV) {
+      console.debug('Unsubscribed from owner rooms')
+    }
   }
 }
 

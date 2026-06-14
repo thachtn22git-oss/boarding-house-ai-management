@@ -2,13 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { StatCard } from '../../../components/dashboard'
 import { useAuth } from '../../auth/useAuth'
-import { getRoomsByOwner, updateRoom } from '../../rooms/services/room.service'
+import { getRoomsByOwner, subscribeOwnerRooms, updateRoom } from '../../rooms/services/room.service'
 import type { Room } from '../../rooms/types'
 import TenantFormModal from '../components/TenantFormModal'
 import {
   createTenant,
   deleteTenant,
   getTenantsByOwner,
+  subscribeOwnerTenants,
   updateTenant,
 } from '../services/tenant.service'
 import type { Tenant, TenantFormValues, TenantStatus } from '../types'
@@ -122,8 +123,57 @@ function TenantManagementPage() {
   }, [currentUser])
 
   useEffect(() => {
-    void Promise.resolve().then(loadTenantData)
-  }, [loadTenantData])
+    if (!currentUser) {
+      setError('You must be signed in to manage tenants.')
+      setLoading(false)
+      return undefined
+    }
+
+    let loadedTenants = false
+    let loadedRooms = false
+    const finishInitialLoad = () => {
+      if (loadedTenants && loadedRooms) {
+        setLoading(false)
+      }
+    }
+
+    setLoading(true)
+    setError(null)
+
+    const unsubscribeTenants = subscribeOwnerTenants(
+      currentUser.uid,
+      (nextTenants) => {
+        setTenants(nextTenants.filter((tenant) => tenant.ownerId === currentUser.uid))
+        loadedTenants = true
+        finishInitialLoad()
+      },
+      (subscriptionError) => {
+        console.warn('Owner tenants realtime update failed.', subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        loadedTenants = true
+        finishInitialLoad()
+      },
+    )
+    const unsubscribeRooms = subscribeOwnerRooms(
+      currentUser.uid,
+      (nextRooms) => {
+        setRooms(nextRooms.filter((room) => room.ownerId === currentUser.uid))
+        loadedRooms = true
+        finishInitialLoad()
+      },
+      (subscriptionError) => {
+        console.warn('Owner tenant rooms realtime update failed.', subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        loadedRooms = true
+        finishInitialLoad()
+      },
+    )
+
+    return () => {
+      unsubscribeTenants()
+      unsubscribeRooms()
+    }
+  }, [currentUser])
 
   function openCreateModal() {
     setEditingTenant(null)

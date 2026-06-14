@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { StatCard } from '../../../components/dashboard'
 import { useAuth } from '../../auth/useAuth'
-import { getRoomsByOwner, updateRoom } from '../../rooms/services/room.service'
+import { getRoomsByOwner, subscribeOwnerRooms, updateRoom } from '../../rooms/services/room.service'
 import type { Room } from '../../rooms/types'
-import { getTenantsByOwner } from '../../tenants/services/tenant.service'
+import { getTenantsByOwner, subscribeOwnerTenants } from '../../tenants/services/tenant.service'
 import type { Tenant } from '../../tenants/types'
 import ContractFormModal from '../components/ContractFormModal'
 import ContractViewModal from '../components/ContractViewModal'
@@ -12,6 +12,7 @@ import {
   createContract,
   deleteContract,
   getContractsByOwner,
+  subscribeOwnerContracts,
   updateContract,
 } from '../services/contract.service'
 import type { Contract, ContractFormValues, ContractStatus } from '../types'
@@ -138,8 +139,73 @@ function ContractManagementPage() {
   }, [currentUser])
 
   useEffect(() => {
-    void Promise.resolve().then(loadContractData)
-  }, [loadContractData])
+    if (!currentUser) {
+      setError('You must be signed in to manage contracts.')
+      setLoading(false)
+      return undefined
+    }
+
+    let loadedContracts = false
+    let loadedTenants = false
+    let loadedRooms = false
+    const finishInitialLoad = () => {
+      if (loadedContracts && loadedTenants && loadedRooms) {
+        setLoading(false)
+      }
+    }
+
+    setLoading(true)
+    setError(null)
+
+    const unsubscribeContracts = subscribeOwnerContracts(
+      currentUser.uid,
+      (nextContracts) => {
+        setContracts(nextContracts.filter((contract) => contract.ownerId === currentUser.uid))
+        loadedContracts = true
+        finishInitialLoad()
+      },
+      (subscriptionError) => {
+        console.warn('Owner contracts realtime update failed.', subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        loadedContracts = true
+        finishInitialLoad()
+      },
+    )
+    const unsubscribeTenants = subscribeOwnerTenants(
+      currentUser.uid,
+      (nextTenants) => {
+        setTenants(nextTenants.filter((tenant) => tenant.ownerId === currentUser.uid))
+        loadedTenants = true
+        finishInitialLoad()
+      },
+      (subscriptionError) => {
+        console.warn('Owner contract tenants realtime update failed.', subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        loadedTenants = true
+        finishInitialLoad()
+      },
+    )
+    const unsubscribeRooms = subscribeOwnerRooms(
+      currentUser.uid,
+      (nextRooms) => {
+        setRooms(nextRooms.filter((room) => room.ownerId === currentUser.uid))
+        loadedRooms = true
+        finishInitialLoad()
+      },
+      (subscriptionError) => {
+        console.warn('Owner contract rooms realtime update failed.', subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        loadedRooms = true
+        finishInitialLoad()
+      },
+    )
+
+    return () => {
+      unsubscribeContracts()
+      unsubscribeTenants()
+      unsubscribeRooms()
+    }
+  }, [currentUser])
 
   function openCreateModal() {
     setEditingContract(null)

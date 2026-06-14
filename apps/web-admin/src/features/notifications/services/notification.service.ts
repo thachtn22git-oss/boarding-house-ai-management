@@ -140,6 +140,21 @@ export function subscribeToNotifications(
   }
 }
 
+export function subscribeUserNotifications(
+  userId: string,
+  role: UserRole,
+  callback: (notifications: Notification[]) => void,
+  onError?: (error: unknown) => void,
+): () => void {
+  return subscribeToNotifications(
+    userId,
+    (notifications) => {
+      callback(notifications.filter((notification) => notification.role === role))
+    },
+    onError,
+  )
+}
+
 async function getNotificationsFromQuery(userId: string, sortByCreatedAt: boolean) {
   const notificationsQuery = sortByCreatedAt
     ? query(

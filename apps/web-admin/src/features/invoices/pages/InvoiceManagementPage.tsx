@@ -3,11 +3,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { StatCard } from '../../../components/dashboard'
 import { getInvoiceDisplayStatus } from '../../../utils/payment-status'
 import { useAuth } from '../../auth/useAuth'
-import { getContractsByOwner } from '../../contracts/services/contract.service'
+import { getContractsByOwner, subscribeOwnerContracts } from '../../contracts/services/contract.service'
 import type { Contract } from '../../contracts/types'
-import { getRoomsByOwner } from '../../rooms/services/room.service'
+import { getRoomsByOwner, subscribeOwnerRooms } from '../../rooms/services/room.service'
 import type { Room } from '../../rooms/types'
-import { getTenantsByOwner } from '../../tenants/services/tenant.service'
+import { getTenantsByOwner, subscribeOwnerTenants } from '../../tenants/services/tenant.service'
 import type { Tenant } from '../../tenants/types'
 import InvoiceFormModal from '../components/InvoiceFormModal'
 import InvoiceViewModal from '../components/InvoiceViewModal'
@@ -17,6 +17,7 @@ import {
   getInvoicesByOwner,
   markInvoiceAsPaid,
   simulateDemoVietQRInvoicePayment,
+  subscribeOwnerInvoices,
   updateInvoice,
 } from '../services/invoice.service'
 import type { Invoice, InvoiceFormValues } from '../types'
@@ -150,8 +151,89 @@ function InvoiceManagementPage() {
   }, [currentUser])
 
   useEffect(() => {
-    void Promise.resolve().then(loadInvoiceData)
-  }, [loadInvoiceData])
+    if (!currentUser) {
+      setError('You must be signed in to manage invoices.')
+      setLoading(false)
+      return undefined
+    }
+
+    let loadedInvoices = false
+    let loadedTenants = false
+    let loadedRooms = false
+    let loadedContracts = false
+    const finishInitialLoad = () => {
+      if (loadedInvoices && loadedTenants && loadedRooms && loadedContracts) {
+        setLoading(false)
+      }
+    }
+
+    setLoading(true)
+    setError(null)
+
+    const unsubscribeInvoices = subscribeOwnerInvoices(
+      currentUser.uid,
+      (nextInvoices) => {
+        setInvoices(nextInvoices.filter((invoice) => invoice.ownerId === currentUser.uid))
+        loadedInvoices = true
+        finishInitialLoad()
+      },
+      (subscriptionError) => {
+        console.warn('Owner invoices realtime update failed.', subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        loadedInvoices = true
+        finishInitialLoad()
+      },
+    )
+    const unsubscribeTenants = subscribeOwnerTenants(
+      currentUser.uid,
+      (nextTenants) => {
+        setTenants(nextTenants.filter((tenant) => tenant.ownerId === currentUser.uid))
+        loadedTenants = true
+        finishInitialLoad()
+      },
+      (subscriptionError) => {
+        console.warn('Owner invoice tenants realtime update failed.', subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        loadedTenants = true
+        finishInitialLoad()
+      },
+    )
+    const unsubscribeRooms = subscribeOwnerRooms(
+      currentUser.uid,
+      (nextRooms) => {
+        setRooms(nextRooms.filter((room) => room.ownerId === currentUser.uid))
+        loadedRooms = true
+        finishInitialLoad()
+      },
+      (subscriptionError) => {
+        console.warn('Owner invoice rooms realtime update failed.', subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        loadedRooms = true
+        finishInitialLoad()
+      },
+    )
+    const unsubscribeContracts = subscribeOwnerContracts(
+      currentUser.uid,
+      (nextContracts) => {
+        setContracts(nextContracts.filter((contract) => contract.ownerId === currentUser.uid))
+        loadedContracts = true
+        finishInitialLoad()
+      },
+      (subscriptionError) => {
+        console.warn('Owner invoice contracts realtime update failed.', subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        loadedContracts = true
+        finishInitialLoad()
+      },
+    )
+
+    return () => {
+      unsubscribeInvoices()
+      unsubscribeTenants()
+      unsubscribeRooms()
+      unsubscribeContracts()
+    }
+  }, [currentUser])
 
   function openCreateModal() {
     setEditingInvoice(null)

@@ -4,10 +4,12 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   query,
   serverTimestamp,
   where,
   type DocumentData,
+  type Unsubscribe,
 } from 'firebase/firestore'
 
 import { db } from '../../../config/firebase'
@@ -215,6 +217,8 @@ function mapContractDocument(documentId: string, data: DocumentData): Contract {
 }
 
 function mapInvoiceDocument(documentId: string, data: DocumentData): Invoice {
+  const status = isInvoiceStatus(data.status) ? data.status : 'draft'
+
   return {
     id: documentId,
     ownerId: String(data.ownerId ?? ''),
@@ -230,7 +234,32 @@ function mapInvoiceDocument(documentId: string, data: DocumentData): Invoice {
     discount: Number(data.discount ?? 0),
     totalAmount: Number(data.totalAmount ?? 0),
     paidAmount: Number(data.paidAmount ?? 0),
-    status: isInvoiceStatus(data.status) ? data.status : 'draft',
+    status,
+    paymentStatus:
+      data.paymentStatus === 'pending' ||
+      data.paymentStatus === 'paid' ||
+      data.paymentStatus === 'failed' ||
+      data.paymentStatus === 'unpaid'
+        ? data.paymentStatus
+        : status === 'paid'
+          ? 'paid'
+          : 'unpaid',
+    paymentMethod:
+      data.paymentMethod === 'manual' ||
+      data.paymentMethod === 'demo_vietqr' ||
+      data.paymentMethod === 'demo_qr'
+        ? data.paymentMethod === 'demo_qr'
+          ? 'demo_vietqr'
+          : data.paymentMethod
+        : undefined,
+    paymentReference:
+      typeof data.paymentReference === 'string' ? data.paymentReference : undefined,
+    paidAt:
+      data.paidAt && typeof data.paidAt === 'object'
+        ? (data.paidAt as Invoice['paidAt'])
+        : null,
+    qrProvider: data.qrProvider === 'vietqr_demo' ? data.qrProvider : undefined,
+    qrPayload: typeof data.qrPayload === 'string' ? data.qrPayload : null,
     note: typeof data.note === 'string' ? data.note : undefined,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
@@ -528,6 +557,193 @@ export async function getCurrentTenant(
     invoices,
     utilities,
     feedbacks,
+  }
+}
+
+export function subscribeCurrentTenant(
+  currentUser: AppUser,
+  callback: (data: TenantPortalData) => void,
+  onError?: (error: unknown) => void,
+): () => void {
+  let childUnsubscribes: Unsubscribe[] = []
+  let currentData: TenantPortalData = {
+    tenant: null,
+    room: null,
+    activeContract: null,
+    invoices: [],
+    utilities: [],
+    feedbacks: [],
+  }
+
+  function emit(partial: Partial<TenantPortalData>) {
+    currentData = {
+      ...currentData,
+      ...partial,
+    }
+    callback(currentData)
+  }
+
+  function cleanupChildren() {
+    childUnsubscribes.forEach((unsubscribe) => unsubscribe())
+    childUnsubscribes = []
+  }
+
+  function subscribeForTenant(tenant: Tenant) {
+    cleanupChildren()
+    emit({
+      tenant,
+      room: null,
+      activeContract: null,
+      invoices: [],
+      utilities: [],
+      feedbacks: [],
+    })
+
+    if (tenant.roomId) {
+      childUnsubscribes.push(
+        onSnapshot(
+          doc(db, 'rooms', tenant.roomId),
+          (roomSnapshot) => {
+            if (!roomSnapshot.exists()) {
+              emit({ room: null })
+              return
+            }
+
+            const room = mapRoomDocument(roomSnapshot.id, roomSnapshot.data())
+            emit({ room: room.ownerId === tenant.ownerId ? room : null })
+          },
+          (error) => {
+            console.warn('Realtime tenant room subscription failed.', error)
+            onError?.(error)
+          },
+        ),
+      )
+    }
+
+    childUnsubscribes.push(
+      onSnapshot(
+        query(contractsCollection, where('tenantId', '==', tenant.id)),
+        (snapshot) => {
+          const contracts = snapshot.docs
+            .map((contractDoc) =>
+              mapContractDocument(contractDoc.id, contractDoc.data()),
+            )
+            .filter((contract) => contract.ownerId === tenant.ownerId)
+          emit({ activeContract: getActiveContract(contracts) })
+        },
+        (error) => {
+          console.warn('Realtime tenant contracts subscription failed.', error)
+          onError?.(error)
+        },
+      ),
+      onSnapshot(
+        query(invoicesCollection, where('tenantId', '==', tenant.id)),
+        (snapshot) => {
+          emit({
+            invoices: sortByCreatedAtDesc(
+              snapshot.docs
+                .map((invoiceDoc) =>
+                  mapInvoiceDocument(invoiceDoc.id, invoiceDoc.data()),
+                )
+                .filter((invoice) => invoice.ownerId === tenant.ownerId),
+            ),
+          })
+        },
+        (error) => {
+          console.warn('Realtime tenant invoices subscription failed.', error)
+          onError?.(error)
+        },
+      ),
+      onSnapshot(
+        query(utilityReadingsCollection, where('tenantId', '==', tenant.id)),
+        (snapshot) => {
+          emit({
+            utilities: sortByCreatedAtDesc(
+              snapshot.docs
+                .map((utilityDoc) =>
+                  mapUtilityReadingDocument(utilityDoc.id, utilityDoc.data()),
+                )
+                .filter((utility) => utility.ownerId === tenant.ownerId),
+            ),
+          })
+        },
+        (error) => {
+          console.warn('Realtime tenant utilities subscription failed.', error)
+          onError?.(error)
+        },
+      ),
+      onSnapshot(
+        query(feedbacksCollection, where('tenantId', '==', tenant.id)),
+        (snapshot) => {
+          emit({
+            feedbacks: sortByCreatedAtDesc(
+              snapshot.docs
+                .map((feedbackDoc) =>
+                  mapFeedbackDocument(feedbackDoc.id, feedbackDoc.data()),
+                )
+                .filter((feedback) => feedback.ownerId === tenant.ownerId),
+            ),
+          })
+        },
+        (error) => {
+          console.warn('Realtime tenant feedback subscription failed.', error)
+          onError?.(error)
+        },
+      ),
+    )
+  }
+
+  const tenantUnsubscribe = onSnapshot(
+    query(tenantsCollection, where('email', '==', currentUser.email)),
+    (snapshot) => {
+      const tenant =
+        snapshot.docs
+          .map((tenantDoc) => mapTenantDocument(tenantDoc.id, tenantDoc.data()))
+          .find((candidate) => candidate.status === 'active') ??
+        (snapshot.docs[0]
+          ? mapTenantDocument(snapshot.docs[0].id, snapshot.docs[0].data())
+          : null)
+
+      if (!tenant) {
+        cleanupChildren()
+        emit({
+          tenant: null,
+          room: null,
+          activeContract: null,
+          invoices: [],
+          utilities: [],
+          feedbacks: [],
+        })
+        return
+      }
+
+      subscribeForTenant(tenant)
+    },
+    (error) => {
+      console.warn('Realtime current tenant subscription failed.', {
+        collection: 'tenants',
+        field: 'email',
+        value: currentUser.email,
+        code: 'code' in error ? error.code : undefined,
+        message: error.message,
+      })
+      void getCurrentTenant(currentUser).then(callback).catch((fallbackError) => {
+        console.warn('Tenant portal fallback fetch failed.', fallbackError)
+      })
+      onError?.(error)
+    },
+  )
+
+  if (import.meta.env.DEV) {
+    console.debug('Subscribed to tenant portal data')
+  }
+
+  return () => {
+    tenantUnsubscribe()
+    cleanupChildren()
+    if (import.meta.env.DEV) {
+      console.debug('Unsubscribed from tenant portal data')
+    }
   }
 }
 

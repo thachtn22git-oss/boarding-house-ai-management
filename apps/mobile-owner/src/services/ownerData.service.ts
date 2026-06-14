@@ -5,10 +5,12 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   query,
   serverTimestamp,
   updateDoc,
   where,
+  type Unsubscribe,
 } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { generateVietQRUrl, generateVietQRUrlForUtility } from '../utils/demo-payment'
@@ -36,6 +38,22 @@ async function getOwnedCollection<T>(collectionName: string, ownerId: string) {
   return snapshot.docs.map((doc) => mapDoc<T>(doc))
 }
 
+function subscribeOwnedCollection<T>(
+  collectionName: string,
+  ownerId: string,
+  callback: (items: T[]) => void,
+  onError?: (error: unknown) => void,
+) {
+  return onSnapshot(
+    query(collection(db, collectionName), where('ownerId', '==', ownerId)),
+    (snapshot) => callback(snapshot.docs.map((doc) => mapDoc<T>(doc))),
+    (error) => {
+      console.warn(`Realtime ${collectionName} subscription failed.`, error)
+      onError?.(error)
+    },
+  )
+}
+
 export async function getOwnerDashboard(ownerId: string) {
   const [rooms, invoices, notifications] = await Promise.all([
     getRooms(ownerId),
@@ -56,6 +74,74 @@ export async function getOwnerDashboard(ownerId: string) {
   }
 }
 
+export function subscribeOwnerDashboard(
+  ownerId: string,
+  callback: (stats: Awaited<ReturnType<typeof getOwnerDashboard>>) => void,
+  onError?: (error: unknown) => void,
+) {
+  let rooms: Room[] = []
+  let invoices: Invoice[] = []
+  let unreadNotifications = 0
+  const loaded = {
+    rooms: false,
+    invoices: false,
+    notifications: false,
+  }
+
+  function emitIfReady() {
+    if (!loaded.rooms || !loaded.invoices || !loaded.notifications) return
+
+    const monthlyRevenue = invoices
+      .filter((invoice) => isInvoicePaid(invoice) && isCurrentInvoicePaymentMonth(invoice))
+      .reduce((total, invoice) => total + getInvoicePaidAmount(invoice), 0)
+
+    callback({
+      totalRooms: rooms.length,
+      occupiedRooms: rooms.filter((room) => room.status === 'occupied').length,
+      vacantRooms: rooms.filter((room) => room.status === 'available').length,
+      monthlyRevenue,
+      unreadNotifications,
+    })
+  }
+
+  const unsubscribeRooms = subscribeRooms(
+    ownerId,
+    (nextRooms) => {
+      rooms = nextRooms
+      loaded.rooms = true
+      emitIfReady()
+    },
+    onError,
+  )
+  const unsubscribeInvoices = subscribeInvoices(
+    ownerId,
+    (nextInvoices) => {
+      invoices = nextInvoices
+      loaded.invoices = true
+      emitIfReady()
+    },
+    onError,
+  )
+  const unsubscribeNotifications = onSnapshot(
+    query(collection(db, 'notifications'), where('userId', '==', ownerId)),
+    (snapshot) => {
+      unreadNotifications = snapshot.docs.filter((item) => !item.data().read).length
+      loaded.notifications = true
+      emitIfReady()
+    },
+    (error) => {
+      console.warn('Realtime owner dashboard notifications subscription failed.', error)
+      onError?.(error)
+    },
+  )
+
+  return () => {
+    unsubscribeRooms()
+    unsubscribeInvoices()
+    unsubscribeNotifications()
+  }
+}
+
 export async function getTenantsWithRooms(ownerId: string): Promise<TenantWithRoom[]> {
   const [tenants, rooms] = await Promise.all([getTenants(ownerId), getRooms(ownerId)])
   const roomById = new Map(rooms.map((room) => [room.id, room]))
@@ -72,6 +158,82 @@ export const getContracts = (ownerId: string) => getOwnedCollection<Contract>('c
 export const getInvoices = (ownerId: string) => getOwnedCollection<Invoice>('invoices', ownerId)
 export const getUtilities = (ownerId: string) => getOwnedCollection<UtilityReading>('utilityReadings', ownerId)
 export const getFeedback = (ownerId: string) => getOwnedCollection<Feedback>('feedbacks', ownerId)
+
+export const subscribeRooms = (
+  ownerId: string,
+  callback: (rooms: Room[]) => void,
+  onError?: (error: unknown) => void,
+) => subscribeOwnedCollection<Room>('rooms', ownerId, callback, onError)
+export const subscribeTenants = (
+  ownerId: string,
+  callback: (tenants: Tenant[]) => void,
+  onError?: (error: unknown) => void,
+) => subscribeOwnedCollection<Tenant>('tenants', ownerId, callback, onError)
+export const subscribeContracts = (
+  ownerId: string,
+  callback: (contracts: Contract[]) => void,
+  onError?: (error: unknown) => void,
+) => subscribeOwnedCollection<Contract>('contracts', ownerId, callback, onError)
+export const subscribeInvoices = (
+  ownerId: string,
+  callback: (invoices: Invoice[]) => void,
+  onError?: (error: unknown) => void,
+) => subscribeOwnedCollection<Invoice>('invoices', ownerId, callback, onError)
+export const subscribeUtilities = (
+  ownerId: string,
+  callback: (utilities: UtilityReading[]) => void,
+  onError?: (error: unknown) => void,
+) => subscribeOwnedCollection<UtilityReading>('utilityReadings', ownerId, callback, onError)
+export const subscribeFeedback = (
+  ownerId: string,
+  callback: (feedback: Feedback[]) => void,
+  onError?: (error: unknown) => void,
+) => subscribeOwnedCollection<Feedback>('feedbacks', ownerId, callback, onError)
+
+export function subscribeTenantsWithRooms(
+  ownerId: string,
+  callback: (tenants: TenantWithRoom[]) => void,
+  onError?: (error: unknown) => void,
+): Unsubscribe {
+  let tenants: Tenant[] = []
+  let rooms: Room[] = []
+  const loaded = { tenants: false, rooms: false }
+
+  function emitIfReady() {
+    if (!loaded.tenants || !loaded.rooms) return
+    const roomById = new Map(rooms.map((room) => [room.id, room]))
+    callback(
+      tenants.map((tenant) => ({
+        ...tenant,
+        room: tenant.roomId ? roomById.get(tenant.roomId) ?? null : null,
+      })),
+    )
+  }
+
+  const unsubscribeTenants = subscribeTenants(
+    ownerId,
+    (nextTenants) => {
+      tenants = nextTenants
+      loaded.tenants = true
+      emitIfReady()
+    },
+    onError,
+  )
+  const unsubscribeRooms = subscribeRooms(
+    ownerId,
+    (nextRooms) => {
+      rooms = nextRooms
+      loaded.rooms = true
+      emitIfReady()
+    },
+    onError,
+  )
+
+  return () => {
+    unsubscribeTenants()
+    unsubscribeRooms()
+  }
+}
 
 export async function createRoom(ownerId: string, values: RoomFormValues) {
   await addDoc(collection(db, 'rooms'), {

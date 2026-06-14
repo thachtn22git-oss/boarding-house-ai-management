@@ -1,6 +1,7 @@
 import {
   collection,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   Timestamp,
@@ -252,19 +253,15 @@ function createActivities(collections: {
     .slice(0, 6)
 }
 
-export async function getOwnerDashboardStats(
-  ownerId: string,
-): Promise<OwnerDashboardStats> {
-  const [rooms, tenants, contracts, invoices, utilityReadings, feedbacks] =
-    await Promise.all([
-      getOwnerDocuments('rooms', ownerId),
-      getOwnerDocuments('tenants', ownerId),
-      getOwnerDocuments('contracts', ownerId),
-      getOwnerDocuments('invoices', ownerId),
-      getOwnerDocuments('utilityReadings', ownerId),
-      getOwnerDocuments('feedbacks', ownerId),
-    ])
-
+function buildOwnerDashboardStats(collections: {
+  rooms: DashboardDocument[]
+  tenants: DashboardDocument[]
+  contracts: DashboardDocument[]
+  invoices: DashboardDocument[]
+  utilityReadings: DashboardDocument[]
+  feedbacks: DashboardDocument[]
+}): OwnerDashboardStats {
+  const { rooms, tenants, contracts, invoices, utilityReadings, feedbacks } = collections
   const totalRooms = rooms.length
   const occupiedRooms = rooms.filter((room) => room.data.status === 'occupied').length
   const vacantRooms = rooms.filter((room) =>
@@ -389,5 +386,97 @@ export async function getOwnerDashboardStats(
       utilityReadings,
       feedbacks,
     }),
+  }
+}
+
+export async function getOwnerDashboardStats(
+  ownerId: string,
+): Promise<OwnerDashboardStats> {
+  const [rooms, tenants, contracts, invoices, utilityReadings, feedbacks] =
+    await Promise.all([
+      getOwnerDocuments('rooms', ownerId),
+      getOwnerDocuments('tenants', ownerId),
+      getOwnerDocuments('contracts', ownerId),
+      getOwnerDocuments('invoices', ownerId),
+      getOwnerDocuments('utilityReadings', ownerId),
+      getOwnerDocuments('feedbacks', ownerId),
+    ])
+
+  return buildOwnerDashboardStats({
+    rooms,
+    tenants,
+    contracts,
+    invoices,
+    utilityReadings,
+    feedbacks,
+  })
+}
+
+export function subscribeOwnerDashboardStats(
+  ownerId: string,
+  callback: (stats: OwnerDashboardStats) => void,
+  onError?: (error: unknown) => void,
+): () => void {
+  const state: Record<CollectionKey, DashboardDocument[] | null> = {
+    rooms: null,
+    tenants: null,
+    contracts: null,
+    invoices: null,
+    utilityReadings: null,
+    feedbacks: null,
+  }
+
+  function maybeEmit() {
+    if (
+      state.rooms &&
+      state.tenants &&
+      state.contracts &&
+      state.invoices &&
+      state.utilityReadings &&
+      state.feedbacks
+    ) {
+      callback(
+        buildOwnerDashboardStats({
+          rooms: state.rooms,
+          tenants: state.tenants,
+          contracts: state.contracts,
+          invoices: state.invoices,
+          utilityReadings: state.utilityReadings,
+          feedbacks: state.feedbacks,
+        }),
+      )
+    }
+  }
+
+  const unsubscribes = ([
+    'rooms',
+    'tenants',
+    'contracts',
+    'invoices',
+    'utilityReadings',
+    'feedbacks',
+  ] as CollectionKey[]).map((collectionName) =>
+    onSnapshot(
+      query(collection(db, collectionName), where('ownerId', '==', ownerId)),
+      (snapshot) => {
+        state[collectionName] = snapshot.docs.map(mapSnapshotDocument)
+        maybeEmit()
+      },
+      (error) => {
+        console.warn(`Realtime dashboard ${collectionName} subscription failed.`, error)
+        onError?.(error)
+      },
+    ),
+  )
+
+  if (import.meta.env.DEV) {
+    console.debug('Subscribed to owner dashboard stats')
+  }
+
+  return () => {
+    unsubscribes.forEach((unsubscribe) => unsubscribe())
+    if (import.meta.env.DEV) {
+      console.debug('Unsubscribed from owner dashboard stats')
+    }
   }
 }

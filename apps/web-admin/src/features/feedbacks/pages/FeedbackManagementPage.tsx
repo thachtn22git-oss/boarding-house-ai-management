@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { StatCard } from '../../../components/dashboard'
 import { useAuth } from '../../auth/useAuth'
-import { getRoomsByOwner } from '../../rooms/services/room.service'
+import { getRoomsByOwner, subscribeOwnerRooms } from '../../rooms/services/room.service'
 import type { Room } from '../../rooms/types'
-import { getTenantsByOwner } from '../../tenants/services/tenant.service'
+import { getTenantsByOwner, subscribeOwnerTenants } from '../../tenants/services/tenant.service'
 import type { Tenant } from '../../tenants/types'
 import FeedbackFormModal from '../components/FeedbackFormModal'
 import FeedbackViewModal from '../components/FeedbackViewModal'
@@ -15,6 +15,7 @@ import {
   markFeedbackAsInReview,
   rejectFeedback,
   resolveFeedback,
+  subscribeOwnerFeedbacks,
   updateFeedback,
   updateFeedbackAIAnalysis,
   updateFeedbackAIError,
@@ -191,8 +192,74 @@ function FeedbackManagementPage() {
   }, [currentUser])
 
   useEffect(() => {
-    void Promise.resolve().then(loadFeedbackData)
-  }, [loadFeedbackData])
+    if (!currentUser) {
+      setError('You must be signed in to manage feedback.')
+      setLoading(false)
+      return undefined
+    }
+
+    let loadedFeedback = false
+    let loadedRooms = false
+    let loadedTenants = false
+    const finishInitialLoad = () => {
+      if (loadedFeedback && loadedRooms && loadedTenants) {
+        setLoading(false)
+      }
+    }
+
+    setLoading(true)
+    setError(null)
+    setNotice(null)
+
+    const unsubscribeFeedback = subscribeOwnerFeedbacks(
+      currentUser.uid,
+      (nextFeedbacks) => {
+        setFeedbacks(nextFeedbacks.filter((feedback) => feedback.ownerId === currentUser.uid))
+        loadedFeedback = true
+        finishInitialLoad()
+      },
+      (subscriptionError) => {
+        console.warn('Owner feedback realtime update failed.', subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        loadedFeedback = true
+        finishInitialLoad()
+      },
+    )
+    const unsubscribeRooms = subscribeOwnerRooms(
+      currentUser.uid,
+      (nextRooms) => {
+        setRooms(nextRooms.filter((room) => room.ownerId === currentUser.uid))
+        loadedRooms = true
+        finishInitialLoad()
+      },
+      (subscriptionError) => {
+        console.warn('Owner feedback rooms realtime update failed.', subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        loadedRooms = true
+        finishInitialLoad()
+      },
+    )
+    const unsubscribeTenants = subscribeOwnerTenants(
+      currentUser.uid,
+      (nextTenants) => {
+        setTenants(nextTenants.filter((tenant) => tenant.ownerId === currentUser.uid))
+        loadedTenants = true
+        finishInitialLoad()
+      },
+      (subscriptionError) => {
+        console.warn('Owner feedback tenants realtime update failed.', subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        loadedTenants = true
+        finishInitialLoad()
+      },
+    )
+
+    return () => {
+      unsubscribeFeedback()
+      unsubscribeRooms()
+      unsubscribeTenants()
+    }
+  }, [currentUser])
 
   function openCreateModal() {
     setEditingFeedback(null)

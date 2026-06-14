@@ -5,6 +5,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
@@ -215,6 +216,26 @@ async function getUtilityReadingsFromQuery(
   )
 }
 
+function getTimestampValue(value: unknown) {
+  if (typeof value === 'object' && value !== null && 'toDate' in value) {
+    return (value as { toDate: () => Date }).toDate().getTime()
+  }
+
+  if (typeof value === 'string') {
+    const time = new Date(value).getTime()
+    return Number.isNaN(time) ? 0 : time
+  }
+
+  return 0
+}
+
+function sortUtilityReadingsByCreatedAt(readings: UtilityReading[]) {
+  return [...readings].sort(
+    (left, right) =>
+      getTimestampValue(right.createdAt) - getTimestampValue(left.createdAt),
+  )
+}
+
 export async function getUtilityReadingsByOwner(
   ownerId: string,
 ): Promise<UtilityReading[]> {
@@ -223,6 +244,96 @@ export async function getUtilityReadingsByOwner(
   } catch {
     return getUtilityReadingsFromQuery(ownerId, false)
   }
+}
+
+function subscribeUtilityReadingsByField(
+  field: 'ownerId' | 'tenantId',
+  value: string,
+  callback: (readings: UtilityReading[]) => void,
+  onError?: (error: unknown) => void,
+  label = 'utility readings',
+): () => void {
+  const unsubscribe = onSnapshot(
+    query(utilityReadingsCollection, where(field, '==', value)),
+    (snapshot) => {
+      const readings = sortUtilityReadingsByCreatedAt(
+        snapshot.docs.map((readingDoc) =>
+          mapUtilityReadingDocument(readingDoc.id, readingDoc.data()),
+        ),
+      )
+      if (import.meta.env.DEV) {
+        console.debug(`${label} snapshot`, {
+          collection: 'utilityReadings',
+          field,
+          value,
+          size: readings.length,
+        })
+      }
+      callback(readings)
+    },
+    (error) => {
+      console.warn(`Realtime ${label} subscription failed.`, {
+        collection: 'utilityReadings',
+        field,
+        value,
+        code: 'code' in error ? error.code : undefined,
+        message: error.message,
+      })
+      const fallback =
+        field === 'ownerId'
+          ? getUtilityReadingsByOwner(value)
+          : getDocs(query(utilityReadingsCollection, where(field, '==', value))).then((snapshot) =>
+              sortUtilityReadingsByCreatedAt(
+                snapshot.docs.map((readingDoc) =>
+                  mapUtilityReadingDocument(readingDoc.id, readingDoc.data()),
+                ),
+              ),
+            )
+      void fallback.then(callback).catch((fallbackError) => {
+        console.warn(`${label} fallback fetch failed.`, fallbackError)
+      })
+      onError?.(error)
+    },
+  )
+
+  if (import.meta.env.DEV) {
+    console.debug(`Subscribed to ${label}`)
+  }
+
+  return () => {
+    unsubscribe()
+    if (import.meta.env.DEV) {
+      console.debug(`Unsubscribed from ${label}`)
+    }
+  }
+}
+
+export function subscribeOwnerUtilityReadings(
+  ownerId: string,
+  callback: (readings: UtilityReading[]) => void,
+  onError?: (error: unknown) => void,
+): () => void {
+  return subscribeUtilityReadingsByField(
+    'ownerId',
+    ownerId,
+    callback,
+    onError,
+    'owner utility readings',
+  )
+}
+
+export function subscribeTenantUtilityReadings(
+  tenantId: string,
+  callback: (readings: UtilityReading[]) => void,
+  onError?: (error: unknown) => void,
+): () => void {
+  return subscribeUtilityReadingsByField(
+    'tenantId',
+    tenantId,
+    callback,
+    onError,
+    'tenant utility readings',
+  )
 }
 
 export async function createUtilityReading(

@@ -9,6 +9,7 @@ import {
 } from '../components/dashboard'
 import {
   getOwnerDashboardStats,
+  subscribeOwnerDashboardStats,
   type DashboardActivity,
   type OwnerDashboardStats,
 } from '../features/dashboard/services/dashboard.service'
@@ -289,8 +290,37 @@ function DashboardPage() {
   }, [currentUser])
 
   useEffect(() => {
-    void Promise.resolve().then(loadDashboard)
-  }, [loadDashboard])
+    if (!currentUser) {
+      setStats(null)
+      setError('You must be signed in to view dashboard data.')
+      setIsLoading(false)
+      return undefined
+    }
+
+    let hasLoadedOnce = false
+    setIsLoading(true)
+    setError('')
+
+    return subscribeOwnerDashboardStats(
+      currentUser.uid,
+      (dashboardStats) => {
+        setStats(dashboardStats)
+        setError('')
+        if (!hasLoadedOnce) {
+          setIsLoading(false)
+          hasLoadedOnce = true
+        }
+      },
+      (subscriptionError) => {
+        console.warn('Owner dashboard realtime update failed.', subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        if (!hasLoadedOnce) {
+          setIsLoading(false)
+          hasLoadedOnce = true
+        }
+      },
+    )
+  }, [currentUser])
 
   const statCards = useMemo(() => {
     if (!stats) {

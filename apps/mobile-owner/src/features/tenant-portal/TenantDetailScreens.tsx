@@ -14,6 +14,7 @@ import {
   getCurrentTenant,
   simulateTenantInvoiceDemoPayment,
   simulateTenantUtilityDemoPayment,
+  subscribeCurrentTenant,
   type TenantFeedbackValues,
   type TenantPortalData,
 } from '../../services/tenantPortal.service'
@@ -41,8 +42,32 @@ function useTenantPortalData() {
   }, [currentUser])
 
   useEffect(() => {
-    void loadData()
-  }, [loadData])
+    if (!currentUser) return undefined
+
+    let hasLoadedOnce = false
+    setLoading(true)
+    setError(null)
+
+    return subscribeCurrentTenant(
+      currentUser,
+      (tenantPortalData) => {
+        setData(tenantPortalData)
+        setError(null)
+        if (!hasLoadedOnce) {
+          setLoading(false)
+          hasLoadedOnce = true
+        }
+      },
+      (subscriptionError) => {
+        console.warn('Tenant portal realtime update failed.', subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        if (!hasLoadedOnce) {
+          setLoading(false)
+          hasLoadedOnce = true
+        }
+      },
+    )
+  }, [currentUser])
 
   return { data, loading, error, reload: loadData }
 }

@@ -1,4 +1,17 @@
-import { addDoc, collection, doc, getDoc, getDocs, limit, query, serverTimestamp, updateDoc, where } from 'firebase/firestore'
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+  type Unsubscribe,
+} from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { generateVietQRUrl, generateVietQRUrlForUtility } from '../utils/demo-payment'
 import type {
@@ -15,7 +28,7 @@ import {
   analyzeFeedbackWithAI,
   type FeedbackAIResult,
 } from '../features/feedback/services/feedback-ai.service'
-import { getNotifications } from './notification.service'
+import { getNotifications, subscribeToNotifications } from './notification.service'
 
 export interface TenantPortalData {
   tenant: Tenant | null
@@ -91,6 +104,148 @@ export async function getCurrentTenant(currentUser: AppUser): Promise<TenantPort
     feedbacks,
     notifications,
     unreadNotifications: notifications.filter((item) => !item.read).length,
+  }
+}
+
+export function subscribeCurrentTenant(
+  currentUser: AppUser,
+  callback: (data: TenantPortalData) => void,
+  onError?: (error: unknown) => void,
+): Unsubscribe {
+  let childUnsubscribes: Unsubscribe[] = []
+  let currentData: TenantPortalData = {
+    tenant: null,
+    room: null,
+    activeContract: null,
+    invoices: [],
+    utilities: [],
+    feedbacks: [],
+    notifications: [],
+    unreadNotifications: 0,
+  }
+
+  function emit(partial: Partial<TenantPortalData>) {
+    currentData = { ...currentData, ...partial }
+    callback(currentData)
+  }
+
+  function cleanupChildren() {
+    childUnsubscribes.forEach((unsubscribe) => unsubscribe())
+    childUnsubscribes = []
+  }
+
+  function subscribeTenantData(tenant: Tenant) {
+    cleanupChildren()
+    emit({
+      tenant,
+      room: null,
+      activeContract: null,
+      invoices: [],
+      utilities: [],
+      feedbacks: [],
+    })
+
+    if (tenant.roomId) {
+      childUnsubscribes.push(
+        onSnapshot(
+          doc(db, 'rooms', tenant.roomId),
+          (snapshot) => {
+            emit({ room: snapshot.exists() ? ({ id: snapshot.id, ...snapshot.data() } as Room) : null })
+          },
+          (error) => {
+            console.warn('Tenant room realtime subscription failed.', error)
+            onError?.(error)
+          },
+        ),
+      )
+    }
+
+    childUnsubscribes.push(
+      onSnapshot(
+        query(collection(db, 'contracts'), where('tenantId', '==', tenant.id)),
+        (snapshot) => {
+          const contracts = snapshot.docs.map((item) => mapDoc<Contract>(item))
+          emit({ activeContract: contracts.find((contract) => contract.status === 'active') ?? null })
+        },
+        (error) => {
+          console.warn('Tenant contracts realtime subscription failed.', error)
+          onError?.(error)
+        },
+      ),
+      onSnapshot(
+        query(collection(db, 'invoices'), where('tenantId', '==', tenant.id)),
+        (snapshot) => {
+          emit({ invoices: sortByDateDesc(snapshot.docs.map((item) => mapDoc<Invoice>(item)), 'dueDate') })
+        },
+        (error) => {
+          console.warn('Tenant invoices realtime subscription failed.', error)
+          onError?.(error)
+        },
+      ),
+      onSnapshot(
+        query(collection(db, 'utilityReadings'), where('tenantId', '==', tenant.id)),
+        (snapshot) => {
+          emit({ utilities: sortByDateDesc(snapshot.docs.map((item) => mapDoc<UtilityReading>(item)), 'billingMonth') })
+        },
+        (error) => {
+          console.warn('Tenant utilities realtime subscription failed.', error)
+          onError?.(error)
+        },
+      ),
+      onSnapshot(
+        query(collection(db, 'feedbacks'), where('tenantId', '==', tenant.id)),
+        (snapshot) => {
+          emit({ feedbacks: snapshot.docs.map((item) => mapDoc<Feedback>(item)) })
+        },
+        (error) => {
+          console.warn('Tenant feedback realtime subscription failed.', error)
+          onError?.(error)
+        },
+      ),
+    )
+  }
+
+  const unsubscribeTenant = onSnapshot(
+    query(collection(db, 'tenants'), where('email', '==', currentUser.email), limit(1)),
+    (snapshot) => {
+      const tenant = snapshot.empty ? null : mapDoc<Tenant>(snapshot.docs[0])
+
+      if (!tenant) {
+        cleanupChildren()
+        emit({
+          tenant: null,
+          room: null,
+          activeContract: null,
+          invoices: [],
+          utilities: [],
+          feedbacks: [],
+        })
+        return
+      }
+
+      subscribeTenantData(tenant)
+    },
+    (error) => {
+      console.warn('Current tenant realtime subscription failed.', error)
+      onError?.(error)
+    },
+  )
+
+  const unsubscribeNotifications = subscribeToNotifications(
+    currentUser.uid,
+    (notifications) => {
+      emit({
+        notifications,
+        unreadNotifications: notifications.filter((item) => !item.read).length,
+      })
+    },
+    onError,
+  )
+
+  return () => {
+    unsubscribeTenant()
+    unsubscribeNotifications()
+    cleanupChildren()
   }
 }
 

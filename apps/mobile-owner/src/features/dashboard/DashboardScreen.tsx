@@ -5,7 +5,7 @@ import { Screen } from '../../components/common/Screen'
 import { StatCard } from '../../components/cards/StatCard'
 import { ListCard } from '../../components/cards/ListCard'
 import { colors, spacing } from '../../constants/theme'
-import { getOwnerDashboard } from '../../services/ownerData.service'
+import { getOwnerDashboard, subscribeOwnerDashboard } from '../../services/ownerData.service'
 import { formatCurrency } from '../../utils/format'
 
 interface OwnerStats {
@@ -39,8 +39,32 @@ export function DashboardScreen() {
   }, [currentUser])
 
   useEffect(() => {
-    void loadStats()
-  }, [loadStats])
+    if (!currentUser) return undefined
+
+    let hasLoadedOnce = false
+    setLoading(true)
+    setError(null)
+
+    return subscribeOwnerDashboard(
+      currentUser.uid,
+      (nextStats) => {
+        setStats(nextStats)
+        setError(null)
+        if (!hasLoadedOnce) {
+          setLoading(false)
+          hasLoadedOnce = true
+        }
+      },
+      (subscriptionError) => {
+        console.warn('Owner dashboard realtime update failed.', subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        if (!hasLoadedOnce) {
+          setLoading(false)
+          hasLoadedOnce = true
+        }
+      },
+    )
+  }, [currentUser])
 
   const hasNoDashboardData =
     !loading &&

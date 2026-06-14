@@ -7,6 +7,7 @@ import {
   createRoom,
   deleteRoom,
   getRoomsByOwner,
+  subscribeOwnerRooms,
   updateRoom,
 } from '../services/room.service'
 import type { Room, RoomFormValues, RoomStatus } from '../types'
@@ -76,8 +77,35 @@ function RoomManagementPage() {
   }, [currentUser])
 
   useEffect(() => {
-    void Promise.resolve().then(loadRooms)
-  }, [loadRooms])
+    if (!currentUser) {
+      setError('You must be signed in to manage rooms.')
+      setLoading(false)
+      return undefined
+    }
+
+    let hasLoadedOnce = false
+    setLoading(true)
+    setError(null)
+
+    return subscribeOwnerRooms(
+      currentUser.uid,
+      (nextRooms) => {
+        setRooms(nextRooms.filter((room) => room.ownerId === currentUser.uid))
+        if (!hasLoadedOnce) {
+          setLoading(false)
+          hasLoadedOnce = true
+        }
+      },
+      (subscriptionError) => {
+        console.warn('Owner rooms realtime update failed.', subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        if (!hasLoadedOnce) {
+          setLoading(false)
+          hasLoadedOnce = true
+        }
+      },
+    )
+  }, [currentUser])
 
   function openCreateModal() {
     setEditingRoom(null)

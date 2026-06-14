@@ -5,6 +5,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
@@ -245,12 +246,110 @@ async function getInvoicesFromQuery(ownerId: string, sortByCreatedAt: boolean) {
   )
 }
 
+function getTimestampValue(value: unknown) {
+  if (typeof value === 'object' && value !== null && 'toDate' in value) {
+    return (value as { toDate: () => Date }).toDate().getTime()
+  }
+
+  if (typeof value === 'string') {
+    const time = new Date(value).getTime()
+    return Number.isNaN(time) ? 0 : time
+  }
+
+  return 0
+}
+
+function sortInvoicesByCreatedAt(invoices: Invoice[]) {
+  return [...invoices].sort(
+    (left, right) =>
+      getTimestampValue(right.createdAt) - getTimestampValue(left.createdAt),
+  )
+}
+
 export async function getInvoicesByOwner(ownerId: string): Promise<Invoice[]> {
   try {
     return await getInvoicesFromQuery(ownerId, true)
   } catch {
     return getInvoicesFromQuery(ownerId, false)
   }
+}
+
+function subscribeInvoicesByField(
+  field: 'ownerId' | 'tenantId',
+  value: string,
+  callback: (invoices: Invoice[]) => void,
+  onError?: (error: unknown) => void,
+  label = 'invoices',
+): () => void {
+  const unsubscribe = onSnapshot(
+    query(invoicesCollection, where(field, '==', value)),
+    (snapshot) => {
+      const invoices = sortInvoicesByCreatedAt(
+        snapshot.docs.map((invoiceDoc) =>
+          mapInvoiceDocument(invoiceDoc.id, invoiceDoc.data()),
+        ),
+      )
+      if (import.meta.env.DEV) {
+        console.debug(`${label} snapshot`, {
+          collection: 'invoices',
+          field,
+          value,
+          size: invoices.length,
+        })
+      }
+      callback(invoices)
+    },
+    (error) => {
+      console.warn(`Realtime ${label} subscription failed.`, {
+        collection: 'invoices',
+        field,
+        value,
+        code: 'code' in error ? error.code : undefined,
+        message: error.message,
+      })
+      const fallback =
+        field === 'ownerId'
+          ? getInvoicesByOwner(value)
+          : getDocs(query(invoicesCollection, where(field, '==', value))).then((snapshot) =>
+              sortInvoicesByCreatedAt(
+                snapshot.docs.map((invoiceDoc) =>
+                  mapInvoiceDocument(invoiceDoc.id, invoiceDoc.data()),
+                ),
+              ),
+            )
+      void fallback.then(callback).catch((fallbackError) => {
+        console.warn(`${label} fallback fetch failed.`, fallbackError)
+      })
+      onError?.(error)
+    },
+  )
+
+  if (import.meta.env.DEV) {
+    console.debug(`Subscribed to ${label}`)
+  }
+
+  return () => {
+    unsubscribe()
+    if (import.meta.env.DEV) {
+      console.debug(`Unsubscribed from ${label}`)
+    }
+  }
+}
+
+export function subscribeOwnerInvoices(
+  ownerId: string,
+  callback: (invoices: Invoice[]) => void,
+  onError?: (error: unknown) => void,
+): () => void {
+  return subscribeInvoicesByField('ownerId', ownerId, callback, onError, 'owner invoices')
+}
+
+export function subscribeTenantInvoices(
+  tenantId: string,
+  callback: (invoices: Invoice[]) => void,
+  onError?: (error: unknown) => void,
+): () => void {
+  return subscribeInvoicesByField('tenantId', tenantId, callback, onError, 'tenant invoices')
 }
 
 export async function createInvoice(

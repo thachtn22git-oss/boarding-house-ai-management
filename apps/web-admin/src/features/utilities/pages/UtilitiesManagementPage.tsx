@@ -3,9 +3,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { StatCard } from '../../../components/dashboard'
 import { getUtilityDisplayStatus } from '../../../utils/payment-status'
 import { useAuth } from '../../auth/useAuth'
-import { getRoomsByOwner } from '../../rooms/services/room.service'
+import { getRoomsByOwner, subscribeOwnerRooms } from '../../rooms/services/room.service'
 import type { Room } from '../../rooms/types'
-import { getTenantsByOwner } from '../../tenants/services/tenant.service'
+import { getTenantsByOwner, subscribeOwnerTenants } from '../../tenants/services/tenant.service'
 import type { Tenant } from '../../tenants/types'
 import UtilityReadingFormModal from '../components/UtilityReadingFormModal'
 import {
@@ -15,6 +15,7 @@ import {
   getUtilityReadingsByOwner,
   markUtilityReadingAsBilled,
   simulateDemoVietQRUtilityPayment,
+  subscribeOwnerUtilityReadings,
   updateUtilityReading,
 } from '../services/utility.service'
 import type {
@@ -315,8 +316,73 @@ function UtilitiesManagementPage() {
   }, [currentUser])
 
   useEffect(() => {
-    void Promise.resolve().then(loadUtilitiesData)
-  }, [loadUtilitiesData])
+    if (!currentUser) {
+      setError('You must be signed in to manage utility readings.')
+      setLoading(false)
+      return undefined
+    }
+
+    let loadedReadings = false
+    let loadedRooms = false
+    let loadedTenants = false
+    const finishInitialLoad = () => {
+      if (loadedReadings && loadedRooms && loadedTenants) {
+        setLoading(false)
+      }
+    }
+
+    setLoading(true)
+    setError(null)
+
+    const unsubscribeReadings = subscribeOwnerUtilityReadings(
+      currentUser.uid,
+      (nextReadings) => {
+        setReadings(nextReadings.filter((reading) => reading.ownerId === currentUser.uid))
+        loadedReadings = true
+        finishInitialLoad()
+      },
+      (subscriptionError) => {
+        console.warn('Owner utility readings realtime update failed.', subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        loadedReadings = true
+        finishInitialLoad()
+      },
+    )
+    const unsubscribeRooms = subscribeOwnerRooms(
+      currentUser.uid,
+      (nextRooms) => {
+        setRooms(nextRooms.filter((room) => room.ownerId === currentUser.uid))
+        loadedRooms = true
+        finishInitialLoad()
+      },
+      (subscriptionError) => {
+        console.warn('Owner utility rooms realtime update failed.', subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        loadedRooms = true
+        finishInitialLoad()
+      },
+    )
+    const unsubscribeTenants = subscribeOwnerTenants(
+      currentUser.uid,
+      (nextTenants) => {
+        setTenants(nextTenants.filter((tenant) => tenant.ownerId === currentUser.uid))
+        loadedTenants = true
+        finishInitialLoad()
+      },
+      (subscriptionError) => {
+        console.warn('Owner utility tenants realtime update failed.', subscriptionError)
+        setError('Realtime updates are unavailable. Showing latest loaded data.')
+        loadedTenants = true
+        finishInitialLoad()
+      },
+    )
+
+    return () => {
+      unsubscribeReadings()
+      unsubscribeRooms()
+      unsubscribeTenants()
+    }
+  }, [currentUser])
 
   function openCreateModal() {
     setEditingReading(null)

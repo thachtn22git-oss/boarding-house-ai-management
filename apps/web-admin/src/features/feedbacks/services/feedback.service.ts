@@ -5,6 +5,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
@@ -207,12 +208,110 @@ async function getFeedbacksFromQuery(ownerId: string, sortByCreatedAt: boolean) 
   )
 }
 
+function getTimestampValue(value: unknown) {
+  if (typeof value === 'object' && value !== null && 'toDate' in value) {
+    return (value as { toDate: () => Date }).toDate().getTime()
+  }
+
+  if (typeof value === 'string') {
+    const time = new Date(value).getTime()
+    return Number.isNaN(time) ? 0 : time
+  }
+
+  return 0
+}
+
+function sortFeedbacksByCreatedAt(feedbacks: Feedback[]) {
+  return [...feedbacks].sort(
+    (left, right) =>
+      getTimestampValue(right.createdAt) - getTimestampValue(left.createdAt),
+  )
+}
+
 export async function getFeedbacksByOwner(ownerId: string): Promise<Feedback[]> {
   try {
     return await getFeedbacksFromQuery(ownerId, true)
   } catch {
     return getFeedbacksFromQuery(ownerId, false)
   }
+}
+
+function subscribeFeedbacksByField(
+  field: 'ownerId' | 'tenantId',
+  value: string,
+  callback: (feedbacks: Feedback[]) => void,
+  onError?: (error: unknown) => void,
+  label = 'feedback',
+): () => void {
+  const unsubscribe = onSnapshot(
+    query(feedbacksCollection, where(field, '==', value)),
+    (snapshot) => {
+      const feedbacks = sortFeedbacksByCreatedAt(
+        snapshot.docs.map((feedbackDoc) =>
+          mapFeedbackDocument(feedbackDoc.id, feedbackDoc.data()),
+        ),
+      )
+      if (import.meta.env.DEV) {
+        console.debug(`${label} snapshot`, {
+          collection: 'feedbacks',
+          field,
+          value,
+          size: feedbacks.length,
+        })
+      }
+      callback(feedbacks)
+    },
+    (error) => {
+      console.warn(`Realtime ${label} subscription failed.`, {
+        collection: 'feedbacks',
+        field,
+        value,
+        code: 'code' in error ? error.code : undefined,
+        message: error.message,
+      })
+      const fallback =
+        field === 'ownerId'
+          ? getFeedbacksByOwner(value)
+          : getDocs(query(feedbacksCollection, where(field, '==', value))).then((snapshot) =>
+              sortFeedbacksByCreatedAt(
+                snapshot.docs.map((feedbackDoc) =>
+                  mapFeedbackDocument(feedbackDoc.id, feedbackDoc.data()),
+                ),
+              ),
+            )
+      void fallback.then(callback).catch((fallbackError) => {
+        console.warn(`${label} fallback fetch failed.`, fallbackError)
+      })
+      onError?.(error)
+    },
+  )
+
+  if (import.meta.env.DEV) {
+    console.debug(`Subscribed to ${label}`)
+  }
+
+  return () => {
+    unsubscribe()
+    if (import.meta.env.DEV) {
+      console.debug(`Unsubscribed from ${label}`)
+    }
+  }
+}
+
+export function subscribeOwnerFeedbacks(
+  ownerId: string,
+  callback: (feedbacks: Feedback[]) => void,
+  onError?: (error: unknown) => void,
+): () => void {
+  return subscribeFeedbacksByField('ownerId', ownerId, callback, onError, 'owner feedback')
+}
+
+export function subscribeTenantFeedbacks(
+  tenantId: string,
+  callback: (feedbacks: Feedback[]) => void,
+  onError?: (error: unknown) => void,
+): () => void {
+  return subscribeFeedbacksByField('tenantId', tenantId, callback, onError, 'tenant feedback')
 }
 
 export async function createFeedback(
