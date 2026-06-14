@@ -161,11 +161,15 @@ function AiAssistantPage() {
       }
       setConversations(nextConversations)
       setSelectedConversation((current) => {
+        if (current?.id.startsWith('local-')) {
+          return current
+        }
+
         if (current && nextConversations.some((item) => item.id === current.id)) {
           return nextConversations.find((item) => item.id === current.id) ?? current
         }
 
-        return nextConversations[0] ?? null
+        return null
       })
     } catch (loadError) {
       console.error('Unable to load AI conversations.', loadError)
@@ -270,34 +274,9 @@ function AiAssistantPage() {
 
     setActiveMenu(null)
     setError('')
-
-    const localConversation = createLocalConversation(currentUser.uid)
-    setConversations((current) => [localConversation, ...current])
-    setSelectedConversation(localConversation)
+    setSelectedConversation(createLocalConversation(currentUser.uid))
     setMessages([])
-
-    if (!isSupabaseConfigured) {
-      setHistoryWarning('AI conversation history is unavailable. You can still use temporary chat.')
-      return
-    }
-
-    try {
-      const conversation = await createConversation(currentUser.uid)
-
-      if (!conversation) {
-        setHistoryWarning(getAIHistoryUnavailableMessage(getLastAIHistoryError()))
-        return
-      }
-
-      setConversations((current) => [
-        conversation,
-        ...current.filter((item) => item.id !== localConversation.id),
-      ])
-      setSelectedConversation(conversation)
-    } catch (createError) {
-      console.error('Unable to create AI conversation.', createError)
-      setHistoryWarning(getAIHistoryUnavailableMessage(createError))
-    }
+    setQuestion('')
   }
 
   async function saveConversationTitle(conversation: AssistantConversation) {
@@ -354,8 +333,7 @@ function AiAssistantPage() {
     setConversations((current) => current.filter((item) => item.id !== conversation.id))
 
     if (selectedConversation?.id === conversation.id) {
-      const nextConversation = conversations.find((item) => item.id !== conversation.id) ?? null
-      setSelectedConversation(nextConversation)
+      setSelectedConversation(null)
       setMessages([])
     }
 
@@ -385,8 +363,9 @@ function AiAssistantPage() {
     try {
       const result = await generateOwnerAssistantAnswer(currentUser.uid, trimmedQuestion)
       let conversation = selectedConversation
+      const isTemporaryConversation = !conversation || conversation.id.startsWith('local-')
 
-      if (!conversation) {
+      if (isTemporaryConversation) {
         const title = getAssistantConversationTitle(result.intent, trimmedQuestion)
         conversation = isSupabaseConfigured
           ? (await createConversation(currentUser.uid, title)) ??
@@ -564,7 +543,11 @@ function AiAssistantPage() {
           <div>
             <p className="page-eyebrow">Owner Portal</p>
             <h1>{selectedConversation?.title ?? 'AI Assistant'}</h1>
-            <p>Ask questions about rooms, tenants, invoices, contracts, utilities, and feedback.</p>
+            <p>
+              {selectedConversation
+                ? 'Ask questions about rooms, tenants, invoices, contracts, utilities, and feedback.'
+                : 'Select a recent chat or start a new conversation.'}
+            </p>
           </div>
         </div>
 
