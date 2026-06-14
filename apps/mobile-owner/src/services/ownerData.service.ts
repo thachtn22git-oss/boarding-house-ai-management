@@ -29,6 +29,28 @@ import type {
   UtilityReadingFormValues,
 } from '../types/models'
 
+export interface OwnerDashboardActivity {
+  id: string
+  title: string
+  timestamp?: unknown
+}
+
+export interface OwnerDashboardStats {
+  totalRooms: number
+  occupiedRooms: number
+  vacantRooms: number
+  monthlyRevenue: number
+  unreadNotifications: number
+  totalTenants: number
+  activeContracts: number
+  unpaidInvoices: number
+  utilityAmount: number
+  pendingFeedback: number
+  urgentFeedback: number
+  insights: string[]
+  recentActivities: OwnerDashboardActivity[]
+}
+
 function mapDoc<T>(doc: { id: string; data: () => Record<string, unknown> }) {
   return { id: doc.id, ...doc.data() } as T
 }
@@ -55,53 +77,73 @@ function subscribeOwnedCollection<T>(
 }
 
 export async function getOwnerDashboard(ownerId: string) {
-  const [rooms, invoices, notifications] = await Promise.all([
+  const [rooms, tenants, contracts, invoices, utilities, feedback, notifications] = await Promise.all([
     getRooms(ownerId),
+    getTenants(ownerId),
+    getContracts(ownerId),
     getInvoices(ownerId),
+    getUtilities(ownerId),
+    getFeedback(ownerId),
     import('./notification.service').then(({ getNotifications }) => getNotifications(ownerId)),
   ])
 
-  const monthlyRevenue = invoices
-    .filter((invoice) => isInvoicePaid(invoice) && isCurrentInvoicePaymentMonth(invoice))
-    .reduce((total, invoice) => total + getInvoicePaidAmount(invoice), 0)
-
-  return {
-    totalRooms: rooms.length,
-    occupiedRooms: rooms.filter((room) => room.status === 'occupied').length,
-    vacantRooms: rooms.filter((room) => room.status === 'available').length,
-    monthlyRevenue,
+  return buildOwnerDashboardStats({
+    rooms,
+    tenants,
+    contracts,
+    invoices,
+    utilities,
+    feedback,
     unreadNotifications: notifications.filter((notification) => !notification.read).length,
-  }
+  })
 }
 
 export function subscribeOwnerDashboard(
   ownerId: string,
-  callback: (stats: Awaited<ReturnType<typeof getOwnerDashboard>>) => void,
+  callback: (stats: OwnerDashboardStats) => void,
   onError?: (error: unknown) => void,
 ) {
   let rooms: Room[] = []
+  let tenants: Tenant[] = []
+  let contracts: Contract[] = []
   let invoices: Invoice[] = []
+  let utilities: UtilityReading[] = []
+  let feedback: Feedback[] = []
   let unreadNotifications = 0
   const loaded = {
     rooms: false,
+    tenants: false,
+    contracts: false,
     invoices: false,
+    utilities: false,
+    feedback: false,
     notifications: false,
   }
 
   function emitIfReady() {
-    if (!loaded.rooms || !loaded.invoices || !loaded.notifications) return
+    if (
+      !loaded.rooms ||
+      !loaded.tenants ||
+      !loaded.contracts ||
+      !loaded.invoices ||
+      !loaded.utilities ||
+      !loaded.feedback ||
+      !loaded.notifications
+    ) {
+      return
+    }
 
-    const monthlyRevenue = invoices
-      .filter((invoice) => isInvoicePaid(invoice) && isCurrentInvoicePaymentMonth(invoice))
-      .reduce((total, invoice) => total + getInvoicePaidAmount(invoice), 0)
-
-    callback({
-      totalRooms: rooms.length,
-      occupiedRooms: rooms.filter((room) => room.status === 'occupied').length,
-      vacantRooms: rooms.filter((room) => room.status === 'available').length,
-      monthlyRevenue,
-      unreadNotifications,
-    })
+    callback(
+      buildOwnerDashboardStats({
+        rooms,
+        tenants,
+        contracts,
+        invoices,
+        utilities,
+        feedback,
+        unreadNotifications,
+      }),
+    )
   }
 
   const unsubscribeRooms = subscribeRooms(
@@ -122,6 +164,42 @@ export function subscribeOwnerDashboard(
     },
     onError,
   )
+  const unsubscribeTenants = subscribeTenants(
+    ownerId,
+    (nextTenants) => {
+      tenants = nextTenants
+      loaded.tenants = true
+      emitIfReady()
+    },
+    onError,
+  )
+  const unsubscribeContracts = subscribeContracts(
+    ownerId,
+    (nextContracts) => {
+      contracts = nextContracts
+      loaded.contracts = true
+      emitIfReady()
+    },
+    onError,
+  )
+  const unsubscribeUtilities = subscribeUtilities(
+    ownerId,
+    (nextUtilities) => {
+      utilities = nextUtilities
+      loaded.utilities = true
+      emitIfReady()
+    },
+    onError,
+  )
+  const unsubscribeFeedback = subscribeFeedback(
+    ownerId,
+    (nextFeedback) => {
+      feedback = nextFeedback
+      loaded.feedback = true
+      emitIfReady()
+    },
+    onError,
+  )
   const unsubscribeNotifications = onSnapshot(
     query(collection(db, 'notifications'), where('userId', '==', ownerId)),
     (snapshot) => {
@@ -138,6 +216,10 @@ export function subscribeOwnerDashboard(
   return () => {
     unsubscribeRooms()
     unsubscribeInvoices()
+    unsubscribeTenants()
+    unsubscribeContracts()
+    unsubscribeUtilities()
+    unsubscribeFeedback()
     unsubscribeNotifications()
   }
 }
@@ -481,6 +563,135 @@ function isInvoicePaid(invoice: Invoice) {
 
 function getInvoicePaidAmount(invoice: Invoice) {
   return Number(invoice.paidAmount || invoice.totalAmount || 0)
+}
+
+function normalizeText(value?: string | null) {
+  return (value ?? '').toLowerCase()
+}
+
+function isInvoiceUnpaid(invoice: Invoice) {
+  return normalizeText(invoice.paymentStatus) !== 'paid' && normalizeText(invoice.status) !== 'paid'
+}
+
+function isFeedbackPending(feedback: Feedback) {
+  return normalizeText(feedback.status) !== 'resolved'
+}
+
+function isFeedbackUrgent(feedback: Feedback) {
+  return normalizeText(feedback.priority) === 'urgent' || normalizeText(feedback.priority) === 'high'
+}
+
+function getRecordTime(item: Record<string, unknown>) {
+  const candidates = [item.paidAt, item.updatedAt, item.createdAt]
+
+  for (const value of candidates) {
+    if (value && typeof value === 'object' && 'toDate' in value) {
+      return (value as { toDate: () => Date }).toDate().getTime()
+    }
+
+    if (typeof value === 'string') {
+      const time = new Date(value).getTime()
+      if (!Number.isNaN(time)) return time
+    }
+  }
+
+  return 0
+}
+
+function getActivityTimestamp(item: Record<string, unknown>) {
+  return item.paidAt ?? item.updatedAt ?? item.createdAt
+}
+
+function buildOwnerDashboardStats({
+  rooms,
+  tenants,
+  contracts,
+  invoices,
+  utilities,
+  feedback,
+  unreadNotifications,
+}: {
+  rooms: Room[]
+  tenants: Tenant[]
+  contracts: Contract[]
+  invoices: Invoice[]
+  utilities: UtilityReading[]
+  feedback: Feedback[]
+  unreadNotifications: number
+}): OwnerDashboardStats {
+  const monthlyRevenue = invoices
+    .filter((invoice) => isInvoicePaid(invoice) && isCurrentInvoicePaymentMonth(invoice))
+    .reduce((total, invoice) => total + getInvoicePaidAmount(invoice), 0)
+  const vacantRooms = rooms.filter((room) => room.status === 'available').length
+  const activeContracts = contracts.filter((contract) => contract.status === 'active').length
+  const unpaidInvoices = invoices.filter(isInvoiceUnpaid).length
+  const urgentFeedback = feedback.filter(isFeedbackUrgent).length
+  const utilityAmount = utilities.reduce((total, reading) => total + Number(reading.totalAmount || 0), 0)
+
+  return {
+    totalRooms: rooms.length,
+    occupiedRooms: rooms.filter((room) => room.status === 'occupied').length,
+    vacantRooms,
+    monthlyRevenue,
+    unreadNotifications,
+    totalTenants: tenants.length,
+    activeContracts,
+    unpaidInvoices,
+    utilityAmount,
+    pendingFeedback: feedback.filter(isFeedbackPending).length,
+    urgentFeedback,
+    insights: [
+      `${vacantRooms} room${vacantRooms === 1 ? '' : 's'} available`,
+      `${activeContracts} active contract${activeContracts === 1 ? '' : 's'}`,
+      `${unpaidInvoices} unpaid invoice${unpaidInvoices === 1 ? '' : 's'}`,
+      `${urgentFeedback} urgent feedback`,
+    ],
+    recentActivities: buildRecentActivities({ invoices, utilities, contracts, feedback }),
+  }
+}
+
+function buildRecentActivities({
+  invoices,
+  utilities,
+  contracts,
+  feedback,
+}: {
+  invoices: Invoice[]
+  utilities: UtilityReading[]
+  contracts: Contract[]
+  feedback: Feedback[]
+}) {
+  const invoiceActivities = invoices.map((invoice) => ({
+    id: `invoice-${invoice.id}`,
+    title: isInvoicePaid(invoice)
+      ? `Payment completed for invoice ${invoice.invoiceCode}`
+      : `Invoice ${invoice.invoiceCode} created`,
+    timestamp: getActivityTimestamp(invoice as unknown as Record<string, unknown>),
+    sortTime: getRecordTime(invoice as unknown as Record<string, unknown>),
+  }))
+  const utilityActivities = utilities.map((reading) => ({
+    id: `utility-${reading.id}`,
+    title: `${reading.utilityType === 'electricity' ? 'Electricity' : 'Water'} utility updated`,
+    timestamp: getActivityTimestamp(reading as unknown as Record<string, unknown>),
+    sortTime: getRecordTime(reading as unknown as Record<string, unknown>),
+  }))
+  const contractActivities = contracts.map((contract) => ({
+    id: `contract-${contract.id}`,
+    title: `Contract ${contract.contractCode} updated`,
+    timestamp: getActivityTimestamp(contract as unknown as Record<string, unknown>),
+    sortTime: getRecordTime(contract as unknown as Record<string, unknown>),
+  }))
+  const feedbackActivities = feedback.map((item) => ({
+    id: `feedback-${item.id}`,
+    title: `Feedback submitted: ${item.title}`,
+    timestamp: getActivityTimestamp(item as unknown as Record<string, unknown>),
+    sortTime: getRecordTime(item as unknown as Record<string, unknown>),
+  }))
+
+  return [...invoiceActivities, ...utilityActivities, ...contractActivities, ...feedbackActivities]
+    .sort((left, right) => right.sortTime - left.sortTime)
+    .slice(0, 5)
+    .map(({ sortTime: _sortTime, ...activity }) => activity)
 }
 
 function calculateInvoiceTotals(items: InvoiceItem[], discount = 0) {
