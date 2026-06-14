@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   ActivityIndicator,
   Alert,
@@ -19,7 +20,6 @@ import { useAuth } from '../../providers/AuthProvider'
 import { formatRelativeTime } from '../../utils/format'
 import {
   askOwnerAssistant,
-  createAssistantConversation,
   deleteAssistantConversation,
   getAssistantMessages,
   getOwnerAIConversations,
@@ -42,6 +42,27 @@ const suggestions = [
   'Summarize AI resolution statistics.',
   'Which feedback requires immediate action?',
 ]
+const DRAFT_CONVERSATION_ID = 'draft-new-chat'
+
+function getLastOpenedStorageKey(ownerId: string) {
+  return `owner-ai-assistant:last-opened:${ownerId}`
+}
+
+function createDraftConversation(ownerId: string): AssistantConversation {
+  const now = new Date().toISOString()
+
+  return {
+    id: DRAFT_CONVERSATION_ID,
+    ownerId,
+    title: 'New Conversation',
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+function isDraftConversation(conversation: AssistantConversation | null) {
+  return conversation?.id === DRAFT_CONVERSATION_ID
+}
 
 export function OwnerAiAssistantScreen() {
   const { currentUser } = useAuth()
@@ -58,6 +79,7 @@ export function OwnerAiAssistantScreen() {
   const [actionConversation, setActionConversation] = useState<AssistantConversation | null>(null)
   const [renameConversation, setRenameConversation] = useState<AssistantConversation | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [lastOpenedConversationId, setLastOpenedConversationId] = useState<string | null>(null)
   const canSubmit = useMemo(() => Boolean(question.trim()) && !sending, [loadingMessages, question, sending])
 
   const loadConversations = useCallback(async () => {
@@ -100,6 +122,19 @@ export function OwnerAiAssistantScreen() {
   }, [loadConversations])
 
   useEffect(() => {
+    if (!currentUser) {
+      setLastOpenedConversationId(null)
+      return
+    }
+
+    void AsyncStorage.getItem(getLastOpenedStorageKey(currentUser.uid))
+      .then(setLastOpenedConversationId)
+      .catch((storageError) => {
+        console.warn('Unable to load last opened AI conversation.', storageError)
+      })
+  }, [currentUser])
+
+  useEffect(() => {
     if (messages.length === 0) return
 
     const timeoutId = setTimeout(() => {
@@ -112,22 +147,27 @@ export function OwnerAiAssistantScreen() {
   async function openConversation(conversation: AssistantConversation) {
     setActionConversation(null)
     setSelectedConversation(conversation)
+    setLastOpenedConversationId(conversation.id)
+    if (currentUser) {
+      void AsyncStorage.setItem(getLastOpenedStorageKey(currentUser.uid), conversation.id).catch((storageError) => {
+        console.warn('Unable to save last opened AI conversation.', storageError)
+      })
+    }
     await loadMessages(conversation)
   }
 
-  async function startNewChat() {
+  function startNewChat() {
     if (!currentUser || sending) return
 
     setActionConversation(null)
-    try {
-      const conversation = await createAssistantConversation(currentUser.uid)
-      setConversations((current) => [conversation, ...current])
-      setSelectedConversation(conversation)
-      setMessages([])
-    } catch (createError) {
-      console.warn('Unable to create AI conversation.', createError)
-      Alert.alert('AI Assistant', 'Unable to create a new chat. Please try again.')
+    if (isDraftConversation(selectedConversation)) {
+      return
     }
+
+    setSelectedConversation(createDraftConversation(currentUser.uid))
+    setMessages([])
+    setQuestion('')
+    setError('')
   }
 
   function openRename(conversation: AssistantConversation) {
@@ -197,12 +237,16 @@ export function OwnerAiAssistantScreen() {
     setConversations(remainingConversations)
 
     if (selectedConversation?.id === conversation.id) {
-      const nextConversation = remainingConversations[0] ?? null
-      setSelectedConversation(nextConversation)
-      if (nextConversation) {
-        await loadMessages(nextConversation)
-      } else {
-        setMessages([])
+      setSelectedConversation(null)
+      setMessages([])
+    }
+
+    if (lastOpenedConversationId === conversation.id) {
+      setLastOpenedConversationId(null)
+      if (currentUser) {
+        void AsyncStorage.removeItem(getLastOpenedStorageKey(currentUser.uid)).catch((storageError) => {
+          console.warn('Unable to clear last opened AI conversation.', storageError)
+        })
       }
     }
 
@@ -229,11 +273,15 @@ export function OwnerAiAssistantScreen() {
       const result = await askOwnerAssistant({
         ownerId: currentUser.uid,
         question: trimmed,
-        conversationId: selectedConversation?.id,
+        conversationId: isDraftConversation(selectedConversation) ? null : selectedConversation?.id,
         conversationTitle: selectedConversation?.title,
       })
 
       setSelectedConversation(result.conversation)
+      setLastOpenedConversationId(result.conversation.id)
+      void AsyncStorage.setItem(getLastOpenedStorageKey(currentUser.uid), result.conversation.id).catch((storageError) => {
+        console.warn('Unable to save last opened AI conversation.', storageError)
+      })
       setMessages((current) => [...current, result.userMessage, result.assistantMessage])
       setConversations((current) => {
         const withoutCurrent = current.filter((item) => item.id !== result.conversation.id)
@@ -258,7 +306,7 @@ export function OwnerAiAssistantScreen() {
             <Text style={styles.title}>Recent Chats</Text>
             <Text style={styles.subtitle}>Ask questions about your boarding house data.</Text>
           </View>
-          <Pressable style={styles.primaryButton} onPress={() => void startNewChat()}>
+          <Pressable style={styles.primaryButton} onPress={startNewChat}>
             <Text style={styles.primaryButtonText}>New Chat</Text>
           </Pressable>
         </View>
@@ -275,9 +323,15 @@ export function OwnerAiAssistantScreen() {
             contentContainerStyle={styles.conversationContent}
             data={conversations}
             keyExtractor={(item) => item.id}
-            ListEmptyComponent={<Text style={styles.emptyText}>No conversations yet. Start a new chat to ask your assistant.</Text>}
+            ListEmptyComponent={<Text style={styles.emptyText}>No conversations yet</Text>}
             renderItem={({ item }) => (
-              <Pressable style={styles.conversationCard} onPress={() => void openConversation(item)}>
+              <Pressable
+                style={[
+                  styles.conversationCard,
+                  item.id === lastOpenedConversationId ? styles.lastOpenedConversationCard : null,
+                ]}
+                onPress={() => void openConversation(item)}
+              >
                 <View style={styles.conversationCopy}>
                   <Text style={styles.conversationTitle}>{item.title}</Text>
                   <Text style={styles.conversationTime}>{formatRelativeTime(item.updatedAt ?? item.createdAt)}</Text>
@@ -325,13 +379,13 @@ export function OwnerAiAssistantScreen() {
       >
         <View style={styles.chatHeader}>
           <Pressable style={styles.backButton} onPress={() => setSelectedConversation(null)}>
-            <Text style={styles.backButtonText}>Recent Chats</Text>
+            <Text style={styles.backButtonText}>{'< Back'}</Text>
           </Pressable>
           <View style={styles.chatHeaderText}>
             <Text style={styles.eyebrow}>AI Assistant</Text>
             <Text style={styles.chatTitle}>{selectedConversation.title}</Text>
           </View>
-          <Pressable style={styles.newChatButton} onPress={() => void startNewChat()}>
+          <Pressable style={styles.newChatButton} onPress={startNewChat}>
             <Text style={styles.newChatButtonText}>New</Text>
           </Pressable>
         </View>
@@ -548,6 +602,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.md,
     padding: spacing.lg,
+  },
+  lastOpenedConversationCard: {
+    borderColor: colors.primary,
+    backgroundColor: '#EFF6FF',
   },
   conversationCopy: {
     flex: 1,
